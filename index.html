@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="PMPPrep"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="application-name" content="PMPPrep"/>
+<meta name="theme-color" content="#07090F"/>
+<meta name="description" content="AI-powered PMP exam preparation — 30 unique questions every session"/>
+<title>PMPPrep · AI-Powered PMP Exam Prep</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+/* ── RESET ─────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#07090F;--card:#111927;--border:#1A2540;
+  --text:#DDE5F0;--muted:#4A5C7A;--subtle:#8BA0BE;
+  --gold:#F5A623;--green:#10B981;--blue:#0EA5E9;--purple:#A78BFA;--red:#EF4444;
+  --r:14px;--fh:'Syne',sans-serif;--fb:'IBM Plex Sans',sans-serif;
+  --safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px);
+  --w:100%;--pad:16px;
+}
+@media(min-width:600px){:root{--w:580px;--pad:20px}}
+@media(min-width:900px){:root{--w:860px;--pad:28px}}
+@media(min-width:1200px){:root{--w:1060px;--pad:32px}}
+
+html,body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100vh;overflow-x:hidden}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#1E2E45;border-radius:3px}
+#app{min-height:100vh;display:flex;flex-direction:column}
+.screen{display:none;flex:1;flex-direction:column;animation:fadeUp .3s ease}
+.screen.active{display:flex}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes glow{0%,100%{text-shadow:0 0 20px rgba(245,166,35,.3)}50%{text-shadow:0 0 50px rgba(245,166,35,.8)}}
+
+/* ── LAYOUT ────────────────────────────────────── */
+.topbar{background:linear-gradient(180deg,#0C1221,var(--bg));border-bottom:1px solid var(--border);padding:calc(var(--safe-top) + 14px) var(--pad) 14px;flex-shrink:0}
+.topbar-inner,.inner{max-width:var(--w);margin:0 auto;width:100%}
+.topbar-inner{display:flex;align-items:center;justify-content:space-between}
+.scroll-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding:var(--pad);padding-bottom:calc(var(--pad) + var(--safe-bot))}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r)}
+
+/* ── TYPOGRAPHY ────────────────────────────────── */
+.logo{font-family:var(--fh);font-size:20px;font-weight:800;letter-spacing:-.5px;color:#EDF2F7}
+.logo span{color:var(--gold)}.logo small{color:var(--muted);font-weight:400;font-size:12px}
+.sec{font-family:var(--fh);font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px}
+@media(min-width:600px){.logo{font-size:22px}}
+@media(min-width:900px){.logo{font-size:24px}.logo small{font-size:13px}}
+
+/* ── BUTTONS ───────────────────────────────────── */
+.btn-g{background:linear-gradient(135deg,#F5A623,#E8920A);color:#07090F;font-family:var(--fh);font-weight:800;border:none;border-radius:11px;cursor:pointer;transition:all .18s;font-size:15px;padding:13px 26px;display:inline-flex;align-items:center;gap:8px;min-height:48px;touch-action:manipulation}
+.btn-g:hover{box-shadow:0 8px 28px rgba(245,166,35,.3);transform:translateY(-1px)}
+.btn-g:active{transform:scale(.97);opacity:.9;box-shadow:none}
+.btn-g:disabled{opacity:.3;pointer-events:none;transform:none;box-shadow:none}
+.btn-o{background:transparent;border:1px solid var(--border);color:var(--subtle);border-radius:10px;cursor:pointer;font-family:var(--fb);font-size:14px;padding:9px 16px;transition:all .15s;min-height:44px;touch-action:manipulation}
+.btn-o:hover,.btn-o:active{border-color:var(--gold);color:var(--gold)}
+.btn-o:disabled{opacity:.25;pointer-events:none}
+@media(min-width:600px){.btn-g{font-size:16px;padding:14px 32px}.btn-o{font-size:15px;padding:10px 20px}}
+
+/* ── MISC ──────────────────────────────────────── */
+.badge{font-size:11px;padding:3px 10px;border-radius:20px;display:inline-block}
+.install-banner{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:12px;padding:14px 16px;margin-bottom:14px;font-size:12px;color:#A5B4FC;line-height:1.6;display:none}
+.err{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:14px 16px;margin-bottom:14px;color:#FCA5A5;font-size:13px;line-height:1.6}
+.tip{padding:14px 18px;background:rgba(245,166,35,.05);border:1px solid rgba(245,166,35,.12);border-radius:12px;font-size:12px;color:var(--muted);line-height:1.7;margin-top:16px}
+@media(min-width:600px){.tip{font-size:13px}}
+
+/* ── STATS ─────────────────────────────────────── */
+.sg{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px}
+@media(min-width:600px){.sg{grid-template-columns:repeat(4,1fr);gap:14px}}
+.sc{padding:16px;border-radius:var(--r);background:var(--card);border:1px solid var(--border)}
+.si{font-size:22px;margin-bottom:8px}
+.sv{font-family:var(--fh);font-size:28px;font-weight:800;line-height:1}
+.su{font-size:11px;margin-top:3px}
+.sl{font-size:11px;color:var(--muted);margin-top:6px}
+@media(min-width:600px){.sv{font-size:32px}.si{font-size:24px}}
+
+/* ── DASHBOARD MAIN COLUMNS ────────────────────── */
+.dm{display:flex;flex-direction:column;gap:14px}
+@media(min-width:900px){.dm{flex-direction:row;align-items:flex-start}.dl{flex:1;min-width:0}.dr{width:300px;flex-shrink:0}}
+@media(min-width:1200px){.dr{width:340px}}
+
+/* ── START CARD ────────────────────────────────── */
+.scard{padding:36px 24px;text-align:center;border-radius:var(--r);background:linear-gradient(135deg,#0E1726,#121E30);border:1px solid #1E2E45}
+.si2{font-size:52px;margin-bottom:14px}
+.st{font-family:var(--fh);font-size:24px;font-weight:800;color:#EDF2F7;margin-bottom:10px}
+.sd{color:var(--muted);font-size:13px;line-height:1.7;margin-bottom:22px}
+.cdt{font-family:var(--fh);font-size:42px;font-weight:800;color:var(--gold);letter-spacing:4px;margin:10px 0}
+@media(min-width:600px){.st{font-size:26px}.sd{font-size:14px}}
+
+/* ── DOMAIN BARS ───────────────────────────────── */
+.dr-row{margin-bottom:18px}
+.dr-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.dr-nm{font-size:13px;color:var(--subtle)}
+.dr-pc{font-family:var(--fh);font-size:13px;font-weight:700}
+.bar{height:5px;background:#1A2540;border-radius:3px;overflow:hidden}
+.bar-f{height:100%;border-radius:3px;transition:width 1.2s cubic-bezier(.4,0,.2,1)}
+.dr-sb{font-size:10px;color:var(--muted);margin-top:4px}
+
+/* ── HISTORY ───────────────────────────────────── */
+.hr{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch}
+.hc{min-width:100px;background:#0C1221;border-radius:12px;padding:14px 12px;text-align:center;border:1px solid transparent;flex-shrink:0}
+@media(min-width:600px){.hc{min-width:115px}}
+
+/* ── EXAM DAYS ─────────────────────────────────── */
+.ed{text-align:right}
+.edn{font-family:var(--fh);font-size:34px;font-weight:800;color:var(--gold);line-height:1}
+.edl{font-size:10px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.8px}
+@media(min-width:600px){.edn{font-size:40px}}
+
+/* ── LOADING / GEN ─────────────────────────────── */
+.ls{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px}
+.sp{width:48px;height:48px;border:3px solid #1A2540;border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite}
+.gs{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:40px 24px}
+.gt{font-family:var(--fh);font-size:26px;font-weight:800;color:#EDF2F7;margin-bottom:10px}
+.gd{color:var(--muted);font-size:13px;line-height:1.7;margin-bottom:24px;max-width:380px}
+.gst{font-size:13px;color:var(--gold);font-style:italic;margin-bottom:22px;min-height:20px}
+.dots{display:flex;gap:10px;justify-content:center}
+.dot{width:10px;height:10px;background:var(--gold);border-radius:50%;animation:pulse 1.3s ease infinite}
+@media(min-width:600px){.gt{font-size:30px}.gd{font-size:14px;max-width:460px}}
+
+/* ── QUIZ ──────────────────────────────────────── */
+.qhd{background:#0C1221;border-bottom:1px solid var(--border);padding:12px var(--pad);flex-shrink:0;padding-top:calc(var(--safe-top) + 12px)}
+.qhr{display:flex;align-items:center;justify-content:space-between;max-width:var(--w);margin:0 auto 10px}
+.pt{max-width:var(--w);margin:0 auto}
+.ptr{height:3px;background:#1A2540;border-radius:2px;overflow:hidden}
+.ptf{height:100%;background:linear-gradient(90deg,#F5A623,#FFCD6B);border-radius:2px;transition:width .3s ease}
+
+.qm{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;align-items:center}
+.qn{font-family:var(--fh);font-weight:700;font-size:13px;color:var(--subtle)}
+.qtp{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;font-family:var(--fh)}
+.qt{background:#0C1221;border:1px solid #1A2540;border-radius:11px;padding:18px;font-size:15px;line-height:1.85;color:#C8D8EC;margin-bottom:14px}
+@media(min-width:600px){.qt{font-size:16px;padding:22px}}
+
+/* Options: 1 col on mobile/tablet-portrait, 2 col on landscape tablet+ */
+.og{display:flex;flex-direction:column;gap:9px}
+@media(min-width:860px){.og{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
+
+.ob{display:flex;align-items:flex-start;gap:12px;padding:13px 15px;border-radius:11px;border:1px solid #1A2540;background:#0E1320;cursor:pointer;width:100%;text-align:left;transition:all .12s;-webkit-appearance:none;touch-action:manipulation;min-height:52px}
+.ob:hover{border-color:#2A3E60;background:#111F35}
+.ob.sel{background:rgba(99,102,241,.1);border-color:#6366F1}
+.ok{width:30px;height:30px;border-radius:8px;background:#1A2540;color:var(--muted);display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-weight:800;font-size:13px;flex-shrink:0}
+.ob.sel .ok{background:#6366F1;color:#fff}
+.ot{font-size:14px;color:var(--subtle);line-height:1.65;padding-top:4px}
+.ob.sel .ot{color:#DDE5F0}
+@media(min-width:600px){.ot{font-size:15px}}
+
+.qft{background:#0C1221;border-top:1px solid var(--border);padding:12px var(--pad);flex-shrink:0;padding-bottom:calc(12px + var(--safe-bot))}
+.qfi{max-width:var(--w);margin:0 auto;display:flex;align-items:center;gap:8px}
+.qgr{flex:1;display:flex;flex-wrap:wrap;gap:4px;justify-content:center}
+.qd{width:28px;height:28px;border-radius:6px;border:none;font-size:9px;font-weight:800;font-family:var(--fh);cursor:pointer;transition:all .1s;touch-action:manipulation}
+
+/* ── RESULTS ───────────────────────────────────── */
+.sh{text-align:center;padding:36px 24px;border-radius:var(--r);margin-bottom:14px;border:1px solid transparent}
+.se{font-size:56px;margin-bottom:12px}
+.sv2{font-family:var(--fh);font-size:80px;font-weight:800;line-height:1}
+.sg2{font-family:var(--fh);font-size:22px;color:#EDF2F7;margin-top:10px}
+.ss{color:var(--muted);font-size:14px;margin-top:6px}
+.stag{font-size:13px;padding:6px 18px;border-radius:20px;display:inline-block;margin-top:14px}
+@media(min-width:600px){.sv2{font-size:96px}}
+
+.drg{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(min-width:600px){.drg{gap:16px}}
+.drc{background:#0C1221;border-radius:12px;padding:16px;border:1px solid transparent;text-align:center}
+.drp{font-family:var(--fh);font-size:30px;font-weight:800}
+@media(min-width:600px){.drp{font-size:36px}}
+.drc2{font-size:10px;margin-top:6px}
+
+.rg{display:flex;flex-wrap:wrap;gap:5px;padding:14px;background:#0C1221;border-radius:10px;margin-bottom:16px}
+.rb{width:36px;height:36px;border-radius:8px;border:2px solid transparent;font-size:11px;font-weight:800;cursor:pointer;font-family:var(--fh);transition:all .1s;touch-action:manipulation}
+.rb.active{border-color:var(--gold)}
+.rb:hover{opacity:.8}
+
+.rd{animation:fadeUp .25s ease}
+.rm{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;align-items:center}
+.ao{display:flex;align-items:flex-start;gap:12px;padding:13px 15px;border-radius:10px;margin-bottom:8px;border:1px solid #1A2540;background:#0E1320}
+.ao.correct{background:rgba(16,185,129,.07);border-color:#065F46}
+.ao.wrong{background:rgba(239,68,68,.07);border-color:#7F1D1D}
+.ak{width:28px;height:28px;border-radius:6px;background:#1A2540;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-weight:800;font-size:12px;flex-shrink:0}
+.at{font-size:13px;line-height:1.65;padding-top:3px}
+.atag{display:block;font-size:10px;font-weight:700;margin-top:4px;font-family:var(--fh);letter-spacing:.5px}
+.eb{background:rgba(245,166,35,.05);border:1px solid rgba(245,166,35,.18);border-radius:11px;padding:18px;margin-top:4px}
+.et{font-family:var(--fh);font-size:11px;font-weight:700;color:var(--gold);margin-bottom:10px;letter-spacing:1.5px;text-transform:uppercase}
+.ex{font-size:13.5px;color:#A8BDD6;line-height:1.9}
+@media(min-width:600px){.ex{font-size:15px}.at{font-size:14px}}
+.rn{display:flex;justify-content:space-between;align-items:center;margin-top:16px}
+.rc{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- LOADING -->
+<div id="screen-loading" class="screen active">
+  <div class="ls">
+    <div class="sp"></div>
+    <div style="font-family:var(--fh);font-size:15px;color:var(--muted)">Loading PMPPrep…</div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="screen-dashboard" class="screen">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="logo">PMP<span>Prep</span> <small>· AI-Powered</small></div>
+        <div id="today-date" style="font-size:11px;color:var(--muted);margin-top:3px"></div>
+      </div>
+      <div class="ed">
+        <div class="edn" id="days-left">60</div>
+        <div class="edl">Days to exam</div>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-area">
+    <div class="inner">
+      <div id="install-banner" class="install-banner" style="display:none"></div>
+      <div id="error-toast" class="err" style="display:none"></div>
+
+      <div class="sg">
+        <div class="sc"><div class="si">🔥</div><div class="sv" id="stat-streak" style="color:var(--gold)">0</div><div class="su" style="color:rgba(245,166,35,.6)">day streak</div><div class="sl">Current Streak</div></div>
+        <div class="sc"><div class="si">⚡</div><div class="sv" id="stat-best" style="color:var(--purple)">0</div><div class="su" style="color:rgba(167,139,250,.6)">best streak</div><div class="sl">Longest Streak</div></div>
+        <div class="sc"><div class="si">📝</div><div class="sv" id="stat-total-q" style="color:var(--blue)">0</div><div class="su" style="color:rgba(14,165,233,.6)">questions done</div><div class="sl">Total Answered</div></div>
+        <div class="sc"><div class="si">🎯</div><div class="sv" id="stat-avg" style="color:var(--green)">—</div><div class="su" id="stat-avg-unit" style="color:rgba(16,185,129,.6)">average score</div><div class="sl">Avg. Score</div></div>
+      </div>
+
+      <div class="dm">
+        <div class="dl">
+          <div class="scard">
+            <div class="si2" id="start-icon">🚀</div>
+            <div class="st" id="start-title">Begin Your Journey</div>
+            <div class="sd" id="start-desc">30 AI-generated questions · Unique every session · Full explanations · Tracks your weak areas</div>
+            <button class="btn-g" id="btn-start" onclick="startSession()">Start Session →</button>
+            <div id="cooldown-wrap" style="display:none">
+              <div class="cdt" id="countdown">00:00:00</div>
+              <div style="font-size:12px;color:var(--muted)" id="next-time-label"></div>
+            </div>
+            <div style="margin-top:14px;font-size:11px;color:var(--muted)" id="start-footer">2 sessions per day · 12-hour cooldown</div>
+          </div>
+          <div id="history-section" style="display:none;margin-top:14px">
+            <div class="card" style="padding:18px">
+              <div class="sec" id="history-title">Recent Sessions</div>
+              <div class="hr" id="history-row"></div>
+            </div>
+          </div>
+        </div>
+        <div class="dr">
+          <div class="card" style="padding:18px">
+            <div class="sec">Domain Performance</div>
+            <div id="domain-bars"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tip">💡 <strong style="color:var(--subtle)">Study tip:</strong> ~50% of the PMP exam is agile/hybrid. People domain = 42% of marks. Target ≥75% to be exam-ready. 2 sessions/day × 60 days = 3,600+ questions.</div>
+    </div>
+  </div>
+</div>
+
+<!-- GENERATING -->
+<div id="screen-generating" class="screen">
+  <div class="gs">
+    <div style="font-size:64px;margin-bottom:20px;animation:glow 2s ease infinite">🧠</div>
+    <div class="gt">Crafting Your Questions</div>
+    <div class="gd">AI is building 30 fresh PMP questions tailored to your level and study history. Generating in 3 batches for reliability — takes about 20 seconds.</div>
+    <div class="gst" id="gen-status">Connecting to AI…</div>
+    <div class="dots">
+      <div class="dot" style="animation-delay:0s"></div>
+      <div class="dot" style="animation-delay:.25s"></div>
+      <div class="dot" style="animation-delay:.5s"></div>
+      <div class="dot" style="animation-delay:.75s"></div>
+    </div>
+  </div>
+</div>
+
+<!-- QUIZ -->
+<div id="screen-quiz" class="screen">
+  <div class="qhd">
+    <div class="qhr">
+      <div class="logo" style="font-size:18px">PMP<span>Prep</span></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:13px;color:var(--muted)"><span id="q-answered">0</span>/<span id="q-total">30</span></span>
+        <button class="btn-o" onclick="exitQuiz()" style="font-size:12px;padding:6px 14px;min-height:36px">Exit</button>
+      </div>
+    </div>
+    <div class="pt"><div class="ptr"><div class="ptf" id="quiz-progress" style="width:0%"></div></div></div>
+  </div>
+  <div class="scroll-area" id="quiz-scroll">
+    <div class="inner" id="quiz-content"></div>
+  </div>
+  <div class="qft">
+    <div class="qfi">
+      <button class="btn-o" id="btn-prev" onclick="prevQ()" style="padding:8px 14px;font-size:13px;flex-shrink:0">← Prev</button>
+      <div class="qgr" id="q-grid"></div>
+      <button class="btn-o" id="btn-next" onclick="nextQ()" style="padding:8px 14px;font-size:13px;flex-shrink:0">Next →</button>
+      <button class="btn-g" id="btn-submit" onclick="submitQuiz()" style="display:none;padding:9px 16px;font-size:14px;flex-shrink:0;min-height:44px">Submit ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESULTS -->
+<div id="screen-results" class="screen">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="logo" style="font-size:18px">PMP<span>Prep</span> <small>· Results</small></div>
+      <button class="btn-g" onclick="goHome()" style="padding:10px 18px;font-size:14px;min-height:44px">← Dashboard</button>
+    </div>
+  </div>
+  <div class="scroll-area">
+    <div class="inner">
+      <div id="results-hero"></div>
+      <div class="card" style="padding:18px;margin-bottom:14px">
+        <div class="sec">Domain Breakdown — This Session</div>
+        <div id="results-domains"></div>
+      </div>
+      <div class="card" style="padding:18px;margin-bottom:14px">
+        <div class="sec">Question Review</div>
+        <div class="rg" id="review-grid"></div>
+        <div id="review-detail"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+const K={t:'pmp-topics-v4',h:'pmp-history-v4',s:'pmp-streak-v4',l:'pmp-lasttime-v4'};
+const DOM={
+  'People':    {bg:'#6366F1',glow:'#818CF8',emoji:'👥',pct:'42%'},
+  'Process':   {bg:'#0EA5E9',glow:'#38BDF8',emoji:'⚙️',pct:'50%'},
+  'Business Environment':{bg:'#10B981',glow:'#34D399',emoji:'🏢',pct:'8%'},
+};
+const DC={Easy:'#10B981',Medium:'#F59E0B',Hard:'#EF4444'};
+let S={topics:[],history:[],streak:{current:0,longest:0,lastDate:null,totalSessions:0},lastTime:null,questions:[],qi:0,ans:{},ri:0};
+let cdt=null,dp=null;
+const $=id=>document.getElementById(id);
+function lg(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch{return null}}
+function ls(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
+function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function grade(p){
+  if(p>=90)return{l:'Excellent',c:'#10B981',e:'🏆',m:'Outstanding performance!'};
+  if(p>=75)return{l:'Proficient',c:'#3B82F6',e:'✅',m:'Above the passing threshold.'};
+  if(p>=61)return{l:'Passing',c:'#F59E0B',e:'📈',m:'Just above minimum — keep pushing!'};
+  return{l:'Needs Work',c:'#EF4444',e:'📚',m:"Keep studying — you're making progress!"};
+}
+function ss(id){
+  document.querySelectorAll('.screen').forEach(s=>{s.classList.remove('active');s.style.display='none'});
+  const el=$('screen-'+id);el.style.display='flex';el.classList.add('active');
+}
+function showErr(msg){const el=$('error-toast');el.innerHTML='❌ '+esc(msg);el.style.display='block';setTimeout(()=>el.style.display='none',10000)}
+
+// Install
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();dp=e;banner('an')});
+window.addEventListener('appinstalled',()=>{dp=null;$('install-banner').style.display='none'});
+function banner(t){
+  const el=$('install-banner');
+  if(t==='an')el.innerHTML=`📲 <strong style="color:#C7D2FE">Install PMPPrep</strong> as an app on your device. <button onclick="doInstall()" style="margin-left:8px;background:linear-gradient(135deg,#F5A623,#E8920A);color:#000;border:none;border-radius:8px;padding:5px 13px;font-size:12px;font-weight:700;cursor:pointer">Install</button> <button onclick="this.parentElement.style.display='none'" style="margin-left:5px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:16px">×</button>`;
+  else if(t==='am')el.innerHTML=`📲 <strong style="color:#C7D2FE">Add to Home Screen</strong> — Tap Chrome's <strong>⋮ menu</strong> (top-right) → "Add to Home screen" <button onclick="this.parentElement.style.display='none'" style="margin-left:8px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:16px">×</button>`;
+  else el.innerHTML=`📱 <strong style="color:#C7D2FE">Add to Home Screen</strong> — Tap Safari's <strong>Share ↑</strong> → "Add to Home Screen" <button onclick="this.parentElement.style.display='none'" style="margin-left:8px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:16px">×</button>`;
+  el.style.display='block';
+}
+function doInstall(){if(!dp)return;dp.prompt();dp.userChoice.then(()=>{dp=null;$('install-banner').style.display='none'})}
+
+// Init
+window.addEventListener('load',()=>{
+  S.topics=lg(K.t)||[];S.history=lg(K.h)||[];
+  S.streak=lg(K.s)||{current:0,longest:0,lastDate:null,totalSessions:0};
+  S.lastTime=lg(K.l);
+  ss('dashboard');renderDash();startCd();
+  const ua=navigator.userAgent;
+  const iOS=/iphone|ipad|ipod/i.test(ua),android=/android/i.test(ua);
+  const stIOS=!!window.navigator.standalone,stAnd=window.matchMedia('(display-mode:standalone)').matches;
+  if(iOS&&!stIOS)banner('ios');
+  else if(android&&!stAnd&&!dp)setTimeout(()=>{if(!dp&&!window.matchMedia('(display-mode:standalone)').matches)banner('am')},1500);
+});
+
+// Countdown
+function startCd(){clearInterval(cdt);cdt=setInterval(tickCd,1000);tickCd()}
+function tickCd(){
+  const lt=S.lastTime;
+  if(!lt){can(true);return}
+  const r=12*3600000-(Date.now()-lt);
+  r<=0?can(true):can(false,r);
+}
+function can(yes,r){
+  if(yes){
+    $('btn-start').style.display='inline-flex';$('cooldown-wrap').style.display='none';
+    $('start-icon').textContent='🚀';
+    $('start-title').textContent=S.history.length===0?'Begin Your Journey':'Ready for Next Session';
+    $('start-desc').textContent='30 AI-generated questions · Unique every session · Full explanations · Tracks your weak areas';
+    $('start-footer').textContent='2 sessions per day · 12-hour cooldown';
+  }else{
+    $('btn-start').style.display='none';$('cooldown-wrap').style.display='block';
+    $('start-icon').textContent='⏳';$('start-title').textContent='Next Session In';$('start-desc').textContent='';
+    $('start-footer').textContent='Session #'+((S.streak.totalSessions||0)+1)+' at '+new Date((S.lastTime||0)+12*3600000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    const h=Math.floor(r/3600000),m=Math.floor(r%3600000/60000),sec=Math.floor(r%60000/1000);
+    $('countdown').textContent=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+  }
+}
+
+// Dashboard
+function renderDash(){
+  $('today-date').textContent=new Date().toLocaleDateString([],{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  $('days-left').textContent=60;
+  const h=S.history,s=S.streak;
+  const avg=h.length?Math.round(h.reduce((a,x)=>a+x.pct,0)/h.length):null;
+  $('stat-streak').textContent=s.current||0;$('stat-best').textContent=s.longest||0;
+  $('stat-total-q').textContent=h.reduce((a,x)=>a+(x.total||0),0);
+  if(avg!=null){const c=avg>=75?'var(--green)':avg>=61?'#F59E0B':'var(--red)';$('stat-avg').textContent=avg+'%';$('stat-avg').style.color=c;$('stat-avg-unit').style.color=c+'AA'}
+  const allD={};
+  h.forEach(x=>Object.entries(x.byDomain||{}).forEach(([d,v])=>{if(!allD[d])allD[d]={c:0,t:0};allD[d].c+=v.c;allD[d].t+=v.t}));
+  $('domain-bars').innerHTML=Object.entries(DOM).map(([domain,dc])=>{
+    const d=allD[domain],p=d&&d.t>0?Math.round(d.c/d.t*100):null;
+    return`<div class="dr-row"><div class="dr-hd"><div class="dr-nm">${dc.emoji} ${domain}</div><div class="dr-pc" style="color:${p!=null?dc.glow:'var(--border)'}">${p!=null?p+'%':'—'} <span style="font-weight:400;font-size:10px;color:var(--muted)">(${dc.pct})</span></div></div><div class="bar"><div class="bar-f" style="width:${p||0}%;background:linear-gradient(90deg,${dc.bg},${dc.glow})"></div></div>${d?`<div class="dr-sb">${d.c}/${d.t} correct</div>`:''}</div>`;
+  }).join('');
+  if(h.length>0){
+    $('history-section').style.display='block';
+    const rec=[...h].reverse().slice(0,10);
+    $('history-title').textContent=`Recent Sessions (${h.length} total)`;
+    $('history-row').innerHTML=rec.map(x=>{const g=grade(x.pct);return`<div class="hc" style="border-color:${g.c}22"><div style="font-size:18px;margin-bottom:5px">${g.e}</div><div style="font-family:var(--fh);font-size:24px;font-weight:800;color:${g.c};line-height:1">${x.pct}%</div><div style="font-size:10px;color:var(--muted);margin-top:3px">${x.score}/${x.total}</div><div style="font-size:9px;color:#2A3A55;margin-top:4px">${new Date(x.date).toLocaleDateString([],{month:'short',day:'numeric'})}</div><div style="height:3px;background:#1A2540;border-radius:2px;margin-top:8px;overflow:hidden"><div style="height:100%;width:${x.pct}%;background:${g.c};border-radius:2px"></div></div></div>`;}).join('');
+  }
+}
+function goHome(){ss('dashboard');renderDash();startCd()}
+
+// API
+async function api(sys,msg){
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4500,system:sys,messages:[{role:'user',content:msg}]})});
+  const d=await r.json();if(d.error)throw new Error(d.error.message);
+  return d.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+}
+function parseQ(raw){
+  const s=raw.indexOf('['),e=raw.lastIndexOf(']');
+  if(s===-1||e<=s)throw new Error('No JSON array in response — please try again');
+  return JSON.parse(raw.slice(s,e+1));
+}
+
+// Start
+async function startSession(){
+  ss('generating');
+  const n=S.history.length,diff=n<5?'easy-medium':n<20?'medium':n<50?'medium-hard':'hard';
+  const ctx=S.topics.length>0?'Already covered (avoid repeating): '+S.topics.slice(-80).join(', '):'First session — start with foundational PMP topics.';
+  const sys=`You are a senior PMP exam coach. Output ONLY a valid JSON array of exactly 10 scenario-based PMP questions. No text before or after the array. No markdown code fences.
+Each object must have: {"id":"q01","domain":"People","topic":"...","difficulty":"Easy|Medium|Hard","approach":"Agile|Hybrid|Predictive","question":"...","options":{"A":"...","B":"...","C":"...","D":"..."},"correct":"A|B|C|D","explanation":"..."}
+domain must be exactly one of: People, Process, Business Environment. All questions must be scenario-based. Wrong answers must be plausible. Reference PMBOK 7 or Agile Practice Guide in explanations.`;
+  const batches=[
+    'People domain: servant leadership, conflict resolution, emotional intelligence, coaching, team building, virtual teams, stakeholder engagement, motivation theories',
+    'Process domain: scope, schedule, cost, risk, quality, procurement, change control, earned value, agile ceremonies (sprint planning, retrospectives, standups), WBS, critical path, RACI matrix',
+    'Business Environment and Integration: benefits realization, organizational agility, governance, compliance, hybrid approaches, portfolio alignment, OKRs, project closure, lessons learned',
+  ];
+  let all=[];
+  try{
+    for(let i=0;i<3;i++){
+      $('gen-status').textContent=`Generating batch ${i+1} of 3  (${i*10}/30 done)…`;
+      const msg=`Session #${n+1}, difficulty: ${diff}. ${ctx}\n\nGenerate 10 unique PMP questions focused on: ${batches[i]}.`;
+      const raw=await api(sys,msg);
+      const parsed=parseQ(raw);
+      if(!Array.isArray(parsed)||parsed.length<4)throw new Error(`Batch ${i+1} failed — please try again`);
+      all=all.concat(parsed);
+    }
+    if(all.length<15)throw new Error('Not enough questions generated — please try again');
+    const tagged=all.map((q,i)=>({...q,id:q.id||`q_${Date.now()}_${i}`}));
+    const nt=tagged.map(q=>q.topic).filter(Boolean);
+    const ut=[...S.topics,...nt];ls(K.t,ut);S.topics=ut;
+    S.questions=tagged;S.qi=0;S.ans={};S.ri=0;
+    renderQuiz();ss('quiz');
+  }catch(e){ss('dashboard');showErr(e.message)}
+}
+
+// Quiz
+function renderQuiz(){renderQC();renderQG();updateNav()}
+function renderQC(){
+  const q=S.questions[S.qi];if(!q)return;
+  const sel=S.ans[q.id],dc=DOM[q.domain]||DOM['Process'];
+  $('quiz-progress').style.width=Math.round((S.qi+1)/S.questions.length*100)+'%';
+  $('q-answered').textContent=Object.keys(S.ans).length;$('q-total').textContent=S.questions.length;
+  const opts=['A','B','C','D'].map(k=>`<button class="ob${sel===k?' sel':''}" onclick="pickA('${k}')"><div class="ok">${k}</div><div class="ot">${esc(q.options[k]||'')}</div></button>`).join('');
+  $('quiz-content').innerHTML=`<div class="qm"><span class="qn">Q${S.qi+1} / ${S.questions.length}</span>${q.domain?`<span class="badge" style="background:${dc.bg}20;color:${dc.glow};border:1px solid ${dc.bg}35">${dc.emoji} ${q.domain}</span>`:''}${q.difficulty?`<span class="badge" style="background:${(DC[q.difficulty]||'#64748B')}18;color:${DC[q.difficulty]||'var(--muted)'}">${q.difficulty}</span>`:''}${q.approach?`<span class="badge" style="background:#1A2540;color:var(--muted)">${esc(q.approach)}</span>`:''}</div>${q.topic?`<div class="qtp">${esc(q.topic)}</div>`:''}<div class="qt">${esc(q.question)}</div><div class="og">${opts}</div>`;
+  $('quiz-scroll').scrollTop=0;
+}
+function renderQG(){
+  $('q-grid').innerHTML=S.questions.map((q,i)=>{const a=S.ans[q.id],act=i===S.qi;return`<button class="qd" onclick="goQ(${i})" style="background:${act?'var(--gold)':a?'#1B4332':'#1A2540'};color:${act?'#000':a?'#34D399':'var(--muted)'};outline:${act?'2px solid #FFCD6B':'none'};outline-offset:1px">${i+1}</button>`;}).join('');
+}
+function updateNav(){
+  const tot=S.questions.length,done=Object.keys(S.ans).length,last=S.qi===tot-1;
+  $('btn-prev').disabled=S.qi===0;
+  $('btn-next').style.display=last?'none':'';$('btn-submit').style.display=last?'':'none';
+  $('btn-submit').disabled=done<tot;$('btn-submit').textContent=done===tot?'Submit ✓':`${tot-done} left`;
+}
+function pickA(k){const q=S.questions[S.qi];if(!q)return;S.ans[q.id]=k;renderQC();renderQG();updateNav()}
+function prevQ(){if(S.qi>0){S.qi--;renderQC();renderQG();updateNav()}}
+function nextQ(){if(S.qi<S.questions.length-1){S.qi++;renderQC();renderQG();updateNav()}}
+function goQ(i){S.qi=i;renderQC();renderQG();updateNav()}
+function exitQuiz(){if(confirm('Exit quiz? All progress will be lost.'))goHome()}
+
+// Submit
+function submitQuiz(){
+  const qs=S.questions,ans=S.ans;
+  const score=qs.reduce((a,q)=>a+(ans[q.id]===q.correct?1:0),0),total=qs.length,pct=Math.round(score/total*100);
+  const bD={};qs.forEach(q=>{if(!bD[q.domain])bD[q.domain]={c:0,t:0};bD[q.domain].t++;if(ans[q.id]===q.correct)bD[q.domain].c++});
+  S.history.push({date:new Date().toISOString(),score,total,pct,byDomain:bD});ls(K.h,S.history);
+  const today=new Date().toDateString(),yest=new Date(Date.now()-86400000).toDateString(),s=S.streak;
+  if(s.lastDate!==today){s.current=s.lastDate===yest?(s.current||0)+1:1;s.longest=Math.max(s.longest||0,s.current)}
+  s.lastDate=today;s.totalSessions=(s.totalSessions||0)+1;ls(K.s,s);S.streak=s;
+  const now=Date.now();ls(K.l,now);S.lastTime=now;
+  S.ri=0;renderResults(score,total,pct,bD);ss('results');
+}
+
+// Results
+function renderResults(score,total,pct,bD){
+  const g=grade(pct);
+  $('results-hero').innerHTML=`<div class="sh" style="background:linear-gradient(135deg,#0E1320,${g.c}0D);border-color:${g.c}30"><div class="se">${g.e}</div><div class="sv2" style="color:${g.c}">${pct}<span style="font-size:36px">%</span></div><div class="sg2">${g.l}</div><div class="ss">${score} correct out of ${total}</div><div class="stag" style="background:${g.c}15;color:${g.c}">${g.m}</div></div>`;
+  $('results-domains').innerHTML=`<div class="drg">${Object.entries(bD).map(([domain,d])=>{const dp2=Math.round(d.c/d.t*100),dc=DOM[domain]||{bg:'#64748B',glow:'#94A3B8',emoji:'📋'};return`<div class="drc" style="border-color:${dc.bg}28"><div style="font-size:12px;color:var(--subtle);margin-bottom:8px">${dc.emoji} ${domain}</div><div class="drp" style="color:${dc.glow}">${dp2}%</div><div class="drc2" style="color:var(--muted)">${d.c}/${d.t} correct</div><div style="height:4px;background:#1A2540;border-radius:2px;margin-top:10px;overflow:hidden"><div style="height:100%;width:${dp2}%;background:linear-gradient(90deg,${dc.bg},${dc.glow});border-radius:2px"></div></div></div>`;}).join('')}</div>`;
+  $('review-grid').innerHTML=S.questions.map((q,i)=>{const ok=S.ans[q.id]===q.correct;return`<button class="rb${i===0?' active':''}" style="background:${ok?'#064E3B':'#450A0A'};color:${ok?'#34D399':'#FCA5A5'}" onclick="setRv(${i})">${i+1}</button>`;}).join('');
+  renderRD();
+}
+function setRv(i){S.ri=i;document.querySelectorAll('.rb').forEach((b,idx)=>b.classList.toggle('active',idx===i));renderRD()}
+function renderRD(){
+  const q=S.questions[S.ri];if(!q)return;
+  const ua=S.ans[q.id],ok=ua===q.correct,dc=DOM[q.domain]||DOM['Process'];
+  const opts=['A','B','C','D'].map(k=>{const isR=q.correct===k,isU=ua===k;let cls='',kc='var(--muted)',tc='var(--muted)',tag='';if(isR){cls='correct';kc='#34D399';tc='#34D399';tag=isU?'✓ Your Correct Choice':'✓ Correct Answer'}else if(isU){cls='wrong';kc='#FCA5A5';tc='#FCA5A5';tag='✗ Your Choice'}return`<div class="ao ${cls}"><div class="ak" style="color:${kc}">${k}</div><div><div class="at" style="color:${isR||isU?tc:'var(--muted)'}">${esc(q.options[k]||'')}</div>${tag?`<span class="atag" style="color:${isR?'#34D399':'#FCA5A5'}">${tag}</span>`:''}</div></div>`;}).join('');
+  $('review-detail').innerHTML=`<div class="rd"><div class="rm"><span style="font-family:var(--fh);font-weight:700;font-size:13px;color:var(--subtle)">Q${S.ri+1}</span><span class="badge" style="background:${ok?'#064E3B':'#450A0A'};color:${ok?'#34D399':'#FCA5A5'}">${ok?'✓ Correct':'✗ Incorrect'}</span>${q.domain?`<span class="badge" style="background:${dc.bg}20;color:${dc.glow}">${q.domain}</span>`:''}${q.difficulty?`<span class="badge" style="background:${(DC[q.difficulty]||'#64748B')}18;color:${DC[q.difficulty]||'var(--muted)'}">${q.difficulty}</span>`:''}${q.topic?`<span style="font-size:11px;color:var(--muted)">· ${esc(q.topic)}</span>`:''}</div><div class="qt">${esc(q.question)}</div>${opts}<div class="eb"><div class="et">💡 Explanation</div><div class="ex">${esc(q.explanation||'')}</div></div><div class="rn"><button class="btn-o" onclick="setRv(${S.ri-1})" ${S.ri===0?'disabled':''}>← Prev</button><span class="rc">${S.ri+1} / ${S.questions.length}</span><button class="btn-o" onclick="setRv(${S.ri+1})" ${S.ri===S.questions.length-1?'disabled':''}>Next →</button></div></div>`;
+}
+</script>
+</body>
+</html>
