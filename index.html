@@ -1080,7 +1080,8 @@ function renderQC(){
     </button>`).join('')}</div>`;
   }else if(q.type==='order'){
     const items=S.orderStates[q.id]||q.items||[];
-    body=`<div class="order-hint">↕️ Tap arrows or drag to arrange in correct order</div>
+    const alreadyConfirmed=isAnswered(q);
+    body=`<div class="order-hint">↕️ Tap arrows or drag to arrange, then tap <strong>Confirm</strong></div>
     <div class="order-list" id="order-list-${q.id}">${items.map((item,idx)=>`
       <div class="order-item" draggable="true" data-idx="${idx}" data-qid="${esc(q.id)}"
         ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="dragDrop(event)" ondragend="dragEnd(event)"
@@ -1092,7 +1093,13 @@ function renderQC(){
           <button class="arr-btn" onclick="moveItem('${esc(q.id)}',${idx},-1)" ${idx===0?'disabled':''}>▲</button>
           <button class="arr-btn" onclick="moveItem('${esc(q.id)}',${idx},1)" ${idx===items.length-1?'disabled':''}>▼</button>
         </div>
-      </div>`).join('')}</div>`;
+      </div>`).join('')}
+    </div>
+    <div style="margin-top:12px;text-align:center">
+      <button onclick="confirmOrder('${esc(q.id)}')" style="background:${alreadyConfirmed?'rgba(16,185,129,.15)':'rgba(99,102,241,.15)'};border:1px solid ${alreadyConfirmed?'#10B981':'#6366F1'};color:${alreadyConfirmed?'#34D399':'#A5B4FC'};border-radius:10px;padding:10px 28px;font-family:var(--fh);font-size:13px;font-weight:700;cursor:pointer;touch-action:manipulation;min-height:44px;width:100%;max-width:320px;transition:all .15s">
+        ${alreadyConfirmed?'✓ Order Confirmed':'Confirm This Order →'}
+      </button>
+    </div>`;
   }else if(q.type==='fillblank'){
     const curVal=S.ans[q.id]||'';
     body=`<div class="fib-hint">✏️ Calculate and type your numeric answer</div>
@@ -1129,7 +1136,7 @@ function isAnswered(q){
   const a=S.ans[q.id];
   if(q.type==='single')return!!a;
   if(q.type==='multi')return Array.isArray(a)&&a.length>0;
-  if(q.type==='order')return Array.isArray(S.orderStates[q.id]);
+  if(q.type==='order')return Array.isArray(a)&&a.length>0; // only true after user moves an item
   if(q.type==='fillblank')return a!==undefined&&a!=='';
   return false;
 }
@@ -1137,7 +1144,12 @@ function scoreQuestion(q,ansMap,ordMap){
   const ans=ansMap||S.ans,ords=ordMap||S.orderStates;
   if(q.type==='single')return ans[q.id]===q.correct?1:0;
   if(q.type==='multi'){const ua=[...(ans[q.id]||[])].sort().join(','),ca=[...q.correct].sort().join(',');return ua===ca?1:0}
-  if(q.type==='order'){const ord=ords[q.id]||[];return ord.join('|')===q.correct.join('|')?1:0}
+  if(q.type==='order'){
+    // Use ans[q.id] if set (user deliberately moved items), otherwise fall back to orderStates
+    const ord=ans[q.id]||ords[q.id]||[];
+    if(!ord.length)return 0;
+    return ord.join('|')===q.correct.join('|')?1:0;
+  }
   if(q.type==='fillblank'){const uv=parseFloat(String(ans[q.id]||'').replace(/,/g,'.'));if(isNaN(uv))return 0;return Math.abs(uv-parseFloat(q.correct))<=(parseFloat(q.tolerance)||0.01)?1:0}
   return 0;
 }
@@ -1157,7 +1169,16 @@ function moveItem(qid,idx,dir){
   const items=[...S.orderStates[qid]],ni=idx+dir;
   if(ni<0||ni>=items.length)return;
   [items[idx],items[ni]]=[items[ni],items[idx]];
-  S.orderStates[qid]=items;S.ans[qid]=[...items];renderQC();renderQG();updateNav();
+  S.orderStates[qid]=items;
+  // Don't auto-confirm on arrow move — wait for explicit confirmOrder
+  renderQC();renderQG();updateNav();
+}
+function confirmOrder(qid){
+  // Snapshot the current display order as the user's committed answer
+  const items=S.orderStates[qid];
+  if(!items)return;
+  S.ans[qid]=[...items];
+  renderQC();renderQG();updateNav();
 }
 
 // ── DRAG & DROP ────────────────────────────────────────────────────────
@@ -1168,7 +1189,9 @@ function dragDrop(e){
   e.preventDefault();if(!dragSrc||dragSrc===e.currentTarget)return;
   const qid=dragSrc.dataset.qid,from=parseInt(dragSrc.dataset.idx),to=parseInt(e.currentTarget.dataset.idx);
   const items=[...S.orderStates[qid]];const[m]=items.splice(from,1);items.splice(to,0,m);
-  S.orderStates[qid]=items;S.ans[qid]=[...items];renderQC();renderQG();updateNav();
+  S.orderStates[qid]=items;
+  // Don't auto-confirm — user must press Confirm button
+  renderQC();renderQG();updateNav();
 }
 function touchStart(e){
   touchDragEl=e.currentTarget;touchStartY=e.touches[0].clientY;touchDragEl.classList.add('dragging');
@@ -1194,7 +1217,9 @@ function touchEnd(e){
   if(target&&target!==touchDragEl){
     const qid=touchDragEl.dataset.qid,from=parseInt(touchDragEl.dataset.idx),to=parseInt(target.dataset.idx);
     const items=[...S.orderStates[qid]];const[m]=items.splice(from,1);items.splice(to,0,m);
-    S.orderStates[qid]=items;S.ans[qid]=[...items];renderQC();renderQG();updateNav();
+    S.orderStates[qid]=items;
+    // Don't auto-confirm — user must press Confirm button
+    renderQC();renderQG();updateNav();
   }
   touchDragEl=null;
 }
