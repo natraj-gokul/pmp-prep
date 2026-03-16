@@ -597,7 +597,11 @@ body{touch-action:pan-y}
         </div>
       </div>
       <input class="ak-input" id="sync-key-input" type="password" placeholder="$2a$10$... or $2b$10$..." autocomplete="off" autocorrect="off" spellcheck="false" style="margin-bottom:8px"/>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:16px;text-align:left;line-height:1.6">Paste the <strong style="color:var(--subtle)">X-MASTER-KEY</strong> from JSONBin → API Keys. Stored only on this device.</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px;text-align:left;line-height:1.6">Paste the <strong style="color:var(--subtle)">X-MASTER-KEY</strong> from JSONBin → API Keys. Stored only on this device.</div>
+      <div id="sync-bin-wrap">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;text-align:left">Bin ID <span style="color:var(--subtle)">(leave blank only on your FIRST device — paste it from your other device's ☁️ Sync screen for all other devices)</span>:</div>
+        <input class="ak-input" id="sync-bin-input" type="text" placeholder="e.g. 69b7be4daa77b81da9eb786a (leave blank if first device)" autocomplete="off" style="margin-bottom:8px;font-family:monospace;font-size:13px"/>
+      </div>
       <div class="ak-err" id="sync-err"></div>
       <button class="btn-g" onclick="saveSyncKey()" style="width:100%;justify-content:center;margin-bottom:10px">Save &amp; Sync Now →</button>
       <div id="sync-disable-wrap" style="display:none">
@@ -999,15 +1003,22 @@ function setSyncLog(msg){const el=$('sync-log');if(el)el.textContent=msg}
 
 function saveSyncKey(){
   const val=($('sync-key-input').value||'').trim();
+  const binVal=($('sync-bin-input').value||'').trim();
   const err=$('sync-err');
-  if(!val){err.textContent='Please paste your JSONBin Secret Key.';return}
+  if(!val){err.textContent='Please paste your JSONBin X-MASTER-KEY.';return}
   if(!val.startsWith('$2b$')&&!val.startsWith('$2a$')){err.textContent='Key should start with $2a$ or $2b$… — copy the X-MASTER-KEY from JSONBin → API Keys.';return}
   err.textContent='';
-  // If changing key, reset bin ID so a new bin is created
+  // If changing key, reset bin ID
   const existing=getSyncKey();
   if(existing&&existing!==val)localStorage.removeItem(K.jb);
   localStorage.setItem(K.jk,val);
-  setSyncLog('Key saved — syncing now…');
+  // If user provided an existing Bin ID, use it (don't create a new bin)
+  if(binVal){
+    localStorage.setItem(K.jb,binVal);
+    setSyncLog('Connecting to existing bin — syncing now…');
+  } else {
+    setSyncLog('No Bin ID — will create new bin on first device…');
+  }
   syncNow(true).then(()=>{renderSyncScreen();renderDash()});
 }
 
@@ -1039,6 +1050,9 @@ function renderSyncScreen(){
       `:'<div style="font-size:12px;color:#F59E0B">Bin ID will appear here after first sync →</div>'}
     </div>`;
     if(inp)inp.placeholder='Enter new key to update…';
+    // Pre-fill bin ID input so user can see it
+    const binInp=$('sync-bin-input');
+    if(binInp&&binId){binInp.value=binId;binInp.style.opacity='0.5';}
     if(disWrap)disWrap.style.display='block';
   } else {
     card.innerHTML=`<div style="background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);border-radius:10px;padding:12px 16px;font-size:13px;color:rgba(245,166,35,.9)">⚡ Sync not set up — enter your JSONBin key below to enable</div>`;
