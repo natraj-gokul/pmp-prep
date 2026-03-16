@@ -839,20 +839,36 @@ let syncInProgress=false;
 function getSyncKey(){return localStorage.getItem(K.jk)||''}
 function getSyncBinId(){return localStorage.getItem(K.jb)||''}
 
-// Bundle all syncable data into one object
+// Bundle all syncable data — keep it lean to stay under JSONBin 100KB free limit
 function buildSyncPayload(){
+  // Strip full question snapshots from history (they're large, not needed cross-device)
+  const leanHistory=S.history.map(h=>{
+    const {questions:_,...rest}=h;
+    return rest;
+  });
+  // Strip full question text from wrongBank — keep only what's needed for spaced rep
+  const leanBank=S.wrongBank.map(q=>({
+    id:q.id,type:q.type,domain:q.domain,topic:q.topic,difficulty:q.difficulty,
+    approach:q.approach,question:(q.question||'').slice(0,120),
+    options:q.options,correct:q.correct,tolerance:q.tolerance,
+    explanation:(q.explanation||'').slice(0,200),
+    items:q.items,formula:q.formula,unit:q.unit,
+    seenCount:q.seenCount||1,_fromBank:true
+  }));
   return{
-    v:1, // schema version
+    v:1,
     updated:Date.now(),
     deviceId:getDeviceId(),
-    history:S.history,
+    history:leanHistory,
     streak:S.streak,
-    topics:S.topics,
-    wrongBank:S.wrongBank,
-    bookmarks:S.bookmarks,
+    topics:S.topics.slice(-100), // last 100 topics only
+    wrongBank:leanBank,
+    bookmarks:S.bookmarks.map(b=>{const{questions:_,...r}=b;return r;}),
     topicScores:S.topicScores,
     explRatings:S.explRatings,
-    wrongPatterns:S.wrongPatterns,
+    wrongPatterns:Object.fromEntries(
+      Object.entries(S.wrongPatterns).map(([k,v])=>[k,{...v,examples:(v.examples||[]).slice(0,2)}])
+    ),
     anthropicKey:localStorage.getItem(K.k)||''
   };
 }
