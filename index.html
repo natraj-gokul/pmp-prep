@@ -348,6 +348,7 @@ body{touch-action:pan-y}
         <div class="edl">Days to exam</div>
         <div style="margin-top:6px;display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap">
           <button class="btn-o" onclick="openApiKey()" style="font-size:11px;padding:4px 9px;min-height:28px;opacity:.6">🔑</button>
+          <button class="btn-o" id="sync-nav-btn" onclick="ss('sync');renderSyncScreen()" style="font-size:11px;padding:4px 9px;min-height:28px">☁️ Sync</button>
           <button class="btn-o" onclick="ss('reference');showRef('ev')" style="font-size:11px;padding:4px 9px;min-height:28px">📚 Ref</button>
           <button class="btn-o" onclick="ss('mastery');renderMastery()" style="font-size:11px;padding:4px 9px;min-height:28px">🎯 Mastery</button>
           <button class="btn-o" onclick="ss('patterns');renderPatterns()" style="font-size:11px;padding:4px 9px;min-height:28px">🔍 Patterns</button>
@@ -360,6 +361,10 @@ body{touch-action:pan-y}
   <div class="scroll-area">
     <div class="inner">
       <div id="install-banner" class="install-banner" style="display:none"></div>
+      <div id="sync-strip" style="display:none;background:rgba(6,182,212,.06);border:1px solid rgba(6,182,212,.2);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--teal);display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <span id="sync-strip-text">☁️ Sync ready</span>
+        <button onclick="syncNow(true)" id="sync-now-btn" style="background:rgba(6,182,212,.15);border:1px solid rgba(6,182,212,.3);color:var(--teal);border-radius:7px;padding:4px 12px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;touch-action:manipulation;flex-shrink:0">Sync Now</button>
+      </div>
       <div id="error-toast" class="err" style="display:none"></div>
       <!-- Readiness -->
       <div id="readiness-card-wrap"></div>
@@ -556,12 +561,49 @@ body{touch-action:pan-y}
   <div class="scroll-area"><div class="inner"><div id="patterns-content"></div></div></div>
 </div>
 
+<!-- SYNC SETUP -->
+<div id="screen-sync" class="screen">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="logo" style="font-size:17px">PMP<span>Prep</span> <small>· Sync Setup</small></div>
+      <button class="btn-g" onclick="goHome()" style="padding:9px 16px;font-size:14px;min-height:44px">← Dashboard</button>
+    </div>
+  </div>
+  <div class="scroll-area"><div class="inner">
+    <div class="card" style="padding:24px;margin-bottom:16px;text-align:center">
+      <div style="font-size:48px;margin-bottom:14px">☁️</div>
+      <div style="font-family:var(--fh);font-size:20px;font-weight:800;color:#EDF2F7;margin-bottom:8px">Cross-Device Sync</div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:20px">Sync your history, streak, mastery data and bookmarks across all your devices using JSONBin — a free cloud storage service.</div>
+      <div id="sync-status-card" style="margin-bottom:20px"></div>
+      <div style="background:#0C1221;border-radius:12px;padding:18px;text-align:left;margin-bottom:20px">
+        <div style="font-family:var(--fh);font-size:12px;font-weight:700;color:var(--gold);letter-spacing:1px;margin-bottom:12px">HOW TO SET UP (2 minutes, free)</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.9">
+          1. Go to <a href="https://jsonbin.io" target="_blank" style="color:var(--blue)">jsonbin.io</a> → Sign up for free<br/>
+          2. After login → click your avatar → <strong style="color:var(--subtle)">API Keys</strong><br/>
+          3. Copy your <strong style="color:var(--subtle)">Secret Key</strong> (starts with $2b$…)<br/>
+          4. Paste it below → tap Save<br/>
+          5. That's it — all your devices use the same key to sync!
+        </div>
+      </div>
+      <input class="ak-input" id="sync-key-input" type="password" placeholder="$2b$10$..." autocomplete="off" autocorrect="off" spellcheck="false" style="margin-bottom:8px"/>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:16px;text-align:left;line-height:1.6">Your JSONBin Secret Key. Stored only on this device — never sent anywhere except JSONBin.</div>
+      <div class="ak-err" id="sync-err"></div>
+      <button class="btn-g" onclick="saveSyncKey()" style="width:100%;justify-content:center;margin-bottom:10px">Save &amp; Sync Now →</button>
+      <div id="sync-disable-wrap" style="display:none">
+        <button class="btn-o" onclick="disableSync()" style="width:100%;justify-content:center;font-size:12px;color:var(--red);border-color:rgba(239,68,68,.3)">Disable Sync</button>
+      </div>
+    </div>
+    <div id="sync-log" style="font-size:11px;color:var(--muted);text-align:center;padding:8px"></div>
+  </div></div>
+</div>
+
 </div>
 <script>
 // ── CONSTANTS ──────────────────────────────────────────────────────────
 const K={t:'pmp-topics-v6',h:'pmp-history-v6',s:'pmp-streak-v6',k:'pmp-apikey-v1',
          wb:'pmp-wrongbank-v1',bm:'pmp-bookmarks-v1',ts:'pmp-topicscores-v1',
-         er:'pmp-explratings-v1',wp:'pmp-wrongpatterns-v1'};
+         er:'pmp-explratings-v1',wp:'pmp-wrongpatterns-v1',
+         jk:'pmp-jsonbin-key',jb:'pmp-jsonbin-id',lastSync:'pmp-last-sync'};
 const TIME_LIMIT_SEC=3450; // 57min 30sec (PMP: 230min/180q × 45q)
 const MAX_SESSIONS_PER_DAY=4;
 const MIN_STREAK_SESSIONS=2; // need at least 2 sessions/day to earn the streak
@@ -775,14 +817,246 @@ function banner(t){
 }
 function doInstall(){if(!dp)return;dp.prompt();dp.userChoice.then(()=>{dp=null;$('install-banner').style.display='none'})}
 
-// ── INIT ───────────────────────────────────────────────────────────────
+// ── SYNC (JSONBin.io) ──────────────────────────────────────────────────
+const JSONBIN_URL='https://api.jsonbin.io/v3';
+let syncInProgress=false;
+
+function getSyncKey(){return localStorage.getItem(K.jk)||''}
+function getSyncBinId(){return localStorage.getItem(K.jb)||''}
+
+// Bundle all syncable data into one object
+function buildSyncPayload(){
+  return{
+    v:1, // schema version
+    updated:Date.now(),
+    deviceId:getDeviceId(),
+    history:S.history,
+    streak:S.streak,
+    topics:S.topics,
+    wrongBank:S.wrongBank,
+    bookmarks:S.bookmarks,
+    topicScores:S.topicScores,
+    explRatings:S.explRatings,
+    wrongPatterns:S.wrongPatterns,
+    anthropicKey:localStorage.getItem(K.k)||''
+  };
+}
+
+// Unique device fingerprint (stable per browser/device)
+function getDeviceId(){
+  let id=localStorage.getItem('pmp-device-id');
+  if(!id){id='dev_'+Math.random().toString(36).slice(2);localStorage.setItem('pmp-device-id',id)}
+  return id;
+}
+
+// Merge remote data with local — keep the union of history, take latest streak
+function mergeData(remote){
+  if(!remote||!remote.v)return false;
+  let changed=false;
+
+  // History: merge by date string, deduplicate
+  const localDates=new Set(S.history.map(h=>h.date));
+  const newFromRemote=(remote.history||[]).filter(h=>!localDates.has(h.date));
+  if(newFromRemote.length>0){
+    S.history=[...S.history,...newFromRemote].sort((a,b)=>new Date(a.date)-new Date(b.date));
+    ls(K.h,S.history);changed=true;
+  }
+
+  // Streak: take whichever has higher current (most up to date)
+  const rs=remote.streak||{};
+  if(rs.totalSessions>(S.streak.totalSessions||0)){
+    // Remote has more sessions — take remote streak but keep local's today progress
+    const todaySess=S.history.filter(h=>new Date(h.date).toDateString()===todayStr()).length;
+    S.streak={...rs,current:Math.max(rs.current||0,S.streak.current||0)};
+    ls(K.s,S.streak);changed=true;
+  }
+
+  // Topics: union
+  const topicSet=new Set([...S.topics,...(remote.topics||[])]);
+  if(topicSet.size>S.topics.length){S.topics=[...topicSet];ls(K.t,S.topics);changed=true;}
+
+  // WrongBank: merge unique by question text
+  const bankQ=new Set(S.wrongBank.map(q=>q.question));
+  const newBank=(remote.wrongBank||[]).filter(q=>!bankQ.has(q.question));
+  if(newBank.length>0){
+    S.wrongBank=[...S.wrongBank,...newBank].slice(0,40);
+    ls(K.wb,S.wrongBank);changed=true;
+  }
+
+  // Bookmarks: merge unique by id
+  const bmIds=new Set(S.bookmarks.map(b=>b.id));
+  const newBm=(remote.bookmarks||[]).filter(b=>!bmIds.has(b.id));
+  if(newBm.length>0){S.bookmarks=[...S.bookmarks,...newBm];ls(K.bm,S.bookmarks);changed=true;}
+
+  // TopicScores: merge by taking max total per topic
+  const rts=remote.topicScores||{};
+  let tsChanged=false;
+  Object.entries(rts).forEach(([topic,rv])=>{
+    const lv=S.topicScores[topic];
+    if(!lv||rv.total>lv.total){S.topicScores[topic]=rv;tsChanged=true;}
+  });
+  if(tsChanged){ls(K.ts,S.topicScores);changed=true;}
+
+  // ExplRatings: merge (remote wins on conflicts)
+  const rer=remote.explRatings||{};
+  const mergedEr={...rer,...S.explRatings}; // local wins
+  if(JSON.stringify(mergedEr)!==JSON.stringify(S.explRatings)){
+    S.explRatings=mergedEr;ls(K.er,S.explRatings);changed=true;
+  }
+
+  // WrongPatterns: merge counts
+  const rwp=remote.wrongPatterns||{};
+  Object.entries(rwp).forEach(([topic,rv])=>{
+    if(!S.wrongPatterns[topic]){S.wrongPatterns[topic]=rv;changed=true;}
+    else if(rv.count>S.wrongPatterns[topic].count){S.wrongPatterns[topic].count=rv.count;changed=true;}
+  });
+  if(changed)ls(K.wp,S.wrongPatterns);
+
+  // Anthropic key: if remote has it and local doesn't, save it
+  if(remote.anthropicKey&&!localStorage.getItem(K.k)){
+    localStorage.setItem(K.k,remote.anthropicKey);changed=true;
+  }
+
+  return changed;
+}
+
+async function syncNow(showFeedback=false){
+  const jk=getSyncKey();if(!jk){updateSyncStrip('⚠️ Sync not set up',false);return}
+  if(syncInProgress)return;
+  syncInProgress=true;
+  updateSyncStrip('☁️ Syncing…',false,true);
+  const btn=$('sync-now-btn');if(btn)btn.disabled=true;
+
+  try{
+    const binId=getSyncBinId();
+    const headers={'Content-Type':'application/json','X-Master-Key':jk};
+
+    if(!binId){
+      // First time — create a new bin
+      const res=await fetch(`${JSONBIN_URL}/b`,{method:'POST',headers:{...headers,'X-Bin-Name':'PMPPrep-Data','X-Bin-Private':'true'},body:JSON.stringify(buildSyncPayload())});
+      const d=await res.json();
+      if(d.metadata?.id){
+        localStorage.setItem(K.jb,d.metadata.id);
+        localStorage.setItem(K.lastSync,Date.now().toString());
+        updateSyncStrip('✅ Sync enabled! Data saved to cloud',true);
+        if(showFeedback)setSyncLog('✅ First sync complete — bin created');
+      } else {
+        throw new Error(d.message||'Could not create bin');
+      }
+    } else {
+      // Fetch remote first, merge, then push
+      const getRes=await fetch(`${JSONBIN_URL}/b/${binId}/latest`,{headers:{'X-Master-Key':jk}});
+      const getData=await getRes.json();
+      const remote=getData.record;
+      // Only merge if remote is newer or from different device
+      if(remote&&remote.deviceId!==getDeviceId()){
+        const merged=mergeData(remote);
+        if(merged&&showFeedback)setSyncLog('✅ Merged data from another device');
+      }
+      // Push merged local data up
+      const putRes=await fetch(`${JSONBIN_URL}/b/${binId}`,{method:'PUT',headers:{...headers},body:JSON.stringify(buildSyncPayload())});
+      const putData=await putRes.json();
+      if(putData.metadata){
+        localStorage.setItem(K.lastSync,Date.now().toString());
+        const t=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+        updateSyncStrip(`✅ Last synced ${t}`,true);
+        if(showFeedback)setSyncLog(`✅ Synced at ${t}`);
+      } else throw new Error(putData.message||'Sync failed');
+    }
+  }catch(e){
+    updateSyncStrip('❌ Sync failed — check your key',false);
+    if(showFeedback)setSyncLog('❌ Error: '+e.message);
+  }
+  syncInProgress=false;
+  if(btn)btn.disabled=false;
+}
+
+function updateSyncStrip(msg,success,loading=false){
+  const strip=$('sync-strip');const txt=$('sync-strip-text');
+  if(!strip||!txt)return;
+  strip.style.display='flex';
+  strip.style.borderColor=loading?'rgba(6,182,212,.2)':success?'rgba(16,185,129,.25)':'rgba(239,68,68,.25)';
+  strip.style.background=loading?'rgba(6,182,212,.06)':success?'rgba(16,185,129,.05)':'rgba(239,68,68,.05)';
+  txt.style.color=loading?'var(--teal)':success?'#34D399':'#FCA5A5';
+  txt.textContent=msg;
+  // Update sync nav button
+  const btn=$('sync-nav-btn');
+  if(btn)btn.textContent=success?'☁️✅':loading?'☁️…':'☁️ Sync';
+}
+
+function setSyncLog(msg){const el=$('sync-log');if(el)el.textContent=msg}
+
+function saveSyncKey(){
+  const val=($('sync-key-input').value||'').trim();
+  const err=$('sync-err');
+  if(!val){err.textContent='Please paste your JSONBin Secret Key.';return}
+  if(!val.startsWith('$2b$')){err.textContent='Key should start with $2b$… — copy it from JSONBin → API Keys → Secret Key.';return}
+  err.textContent='';
+  // If changing key, reset bin ID so a new bin is created
+  const existing=getSyncKey();
+  if(existing&&existing!==val)localStorage.removeItem(K.jb);
+  localStorage.setItem(K.jk,val);
+  setSyncLog('Key saved — syncing now…');
+  syncNow(true).then(()=>{renderSyncScreen();renderDash()});
+}
+
+function disableSync(){
+  if(!confirm('Disable sync? Your cloud data stays in JSONBin but this device will stop syncing.'))return;
+  localStorage.removeItem(K.jk);localStorage.removeItem(K.jb);localStorage.removeItem(K.lastSync);
+  const strip=$('sync-strip');if(strip)strip.style.display='none';
+  renderSyncScreen();
+}
+
+function renderSyncScreen(){
+  const jk=getSyncKey(),binId=getSyncBinId(),lastSync=localStorage.getItem(K.lastSync);
+  const card=$('sync-status-card');
+  const inp=$('sync-key-input');
+  const disWrap=$('sync-disable-wrap');
+  if(!card)return;
+  if(jk){
+    const t=lastSync?new Date(parseInt(lastSync)).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'Never';
+    card.innerHTML=`<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:12px 16px;text-align:left">
+      <div style="font-size:13px;color:#34D399;font-family:var(--fh);margin-bottom:6px">✅ Sync is Active</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.6">Bin ID: <span style="color:var(--subtle)">${binId||'Creating on first sync…'}</span><br/>Last synced: <span style="color:var(--subtle)">${t}</span></div>
+    </div>`;
+    if(inp)inp.placeholder='Enter new key to update…';
+    if(disWrap)disWrap.style.display='block';
+  } else {
+    card.innerHTML=`<div style="background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);border-radius:10px;padding:12px 16px;font-size:13px;color:rgba(245,166,35,.9)">⚡ Sync not set up — enter your JSONBin key below to enable</div>`;
+    if(inp)inp.placeholder='$2b$10$…';
+    if(disWrap)disWrap.style.display='none';
+  }
+}
+
+// Auto-sync after every session submit and bookmark change
+async function autoSync(){if(getSyncKey())syncNow(false)}
+
+
 window.addEventListener('load',()=>{
   S.topics=lg(K.t)||[];S.history=lg(K.h)||[];
   S.streak=lg(K.s)||{current:0,longest:0,lastDate:null,totalSessions:0};
   S.wrongBank=lg(K.wb)||[];S.bookmarks=lg(K.bm)||[];S.topicScores=lg(K.ts)||{};
   S.explRatings=lg(K.er)||{};S.wrongPatterns=lg(K.wp)||{};
+
+  const jk=getSyncKey();
+  // If sync is set up but no Anthropic key locally, pull from cloud first then continue
+  if(jk&&!localStorage.getItem(K.k)){
+    updateSyncStrip('☁️ Fetching your settings from cloud…',true,true);
+    syncNow(false).then(()=>{
+      if(localStorage.getItem(K.k)){ss('dashboard');renderDash();startCd();buildRefCards();updateSyncStrip('✅ Synced',true)}
+      else{ss('apikey')}
+    });
+    return;
+  }
   if(!localStorage.getItem(K.k)){ss('apikey');return}
   ss('dashboard');renderDash();startCd();buildRefCards();
+  // Pull latest sync data on load
+  if(jk){
+    const lastSync=localStorage.getItem(K.lastSync);
+    const t=lastSync?new Date(parseInt(lastSync)).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'never';
+    updateSyncStrip(`☁️ Last synced ${t} — pulling latest…`,true,true);
+    syncNow(false).then(()=>renderDash());
+  }
   const ua=navigator.userAgent,iOS=/iphone|ipad|ipod/i.test(ua),android=/android/i.test(ua);
   const stIOS=!!window.navigator.standalone,stAnd=window.matchMedia('(display-mode:standalone)').matches;
   if(iOS&&!stIOS)banner('ios');
@@ -1033,7 +1307,7 @@ function toggleBookmark(qid){
   if(isBookmarked(qid)){S.bookmarks=S.bookmarks.filter(b=>b.id!==qid)}
   else{S.bookmarks.push({...q,bookmarkedAt:new Date().toISOString()})}
   ls(K.bm,S.bookmarks);
-  // Update button appearance
+  autoSync(); // sync bookmark changes across devices
   const btn=$(`bm-${qid}`);if(btn){btn.className='bm-btn'+(isBookmarked(qid)?' active':'')}
   renderQG(); // update grid dots
 }
@@ -1262,6 +1536,7 @@ function submitQuiz(){
   }
   str.totalSessions=(str.totalSessions||0)+1;ls(K.s,str);S.streak=str;
   S.orderStates={};renderResults(score,total,pct,bD,durSec);ss('results');
+  autoSync(); // push to cloud after every session
 }
 
 // ── RESULTS ────────────────────────────────────────────────────────────
