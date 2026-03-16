@@ -1233,18 +1233,27 @@ function submitQuiz(){
   stopQTimer();
   const durSec=quizStart?Math.floor((Date.now()-quizStart)/1000):0;quizStart=null;
   const qs=S.questions,ans=S.ans,ords=S.orderStates;
+
+  // Auto-confirm any order questions the user didn't explicitly confirm
+  // (use their current displayed arrangement as their answer)
+  qs.forEach(q=>{
+    if(q.type==='order'&&!ans[q.id]&&ords[q.id]&&ords[q.id].length>0){
+      ans[q.id]=[...ords[q.id]];
+    }
+  });
+
   const score=qs.reduce((a,q)=>a+scoreQuestion(q,ans,ords),0),total=qs.length,pct=Math.round(score/total*100);
   const bD={};qs.forEach(q=>{if(!bD[q.domain])bD[q.domain]={c:0,t:0};bD[q.domain].t++;bD[q.domain].c+=scoreQuestion(q,ans,ords)});
-  const qSnap=qs.map(q=>({...q,userAns:q.type==='order'?ords[q.id]:ans[q.id],scored:scoreQuestion(q,ans,ords)}));
+  // For order: userAns = ans[q.id] (confirmed or auto-confirmed), never ords directly
+  const qSnap=qs.map(q=>({...q,userAns:ans[q.id],scored:scoreQuestion(q,ans,ords)}));
   S.history.push({date:new Date().toISOString(),score,total,pct,byDomain:bD,durationSec:durSec,questions:qSnap});
   ls(K.h,S.history);
-  // Update spaced repetition bank and topic scores
   addToWrongBank(qs,ans,ords);
   updateTopicScores(qs,ans,ords);
   updateWrongPatterns(qs,ans,ords);
   // Streak — earned when MIN_STREAK_SESSIONS (2) completed today
   const today=todayStr(),yest=new Date(Date.now()-86400000).toDateString(),str=S.streak;
-  const sessCompletedToday=S.history.filter(h=>new Date(h.date).toDateString()===today).length; // after push
+  const sessCompletedToday=S.history.filter(h=>new Date(h.date).toDateString()===today).length;
   const streakEarnedToday=sessCompletedToday>=MIN_STREAK_SESSIONS;
   if(streakEarnedToday&&str.lastDate!==today){
     str.current=str.lastDate===yest?(str.current||0)+1:1;
@@ -1279,7 +1288,7 @@ function renderResults(score,total,pct,bD,durSec){
 
 // ── Q LIST ITEM (shared for results, history, bookmarks) ───────────────
 function buildQLItem(q,i,idPfx,opts){
-  const ua=q.userAns!==undefined?q.userAns:(q.type==='order'?S.orderStates[q.id]:S.ans[q.id]);
+  const ua=q.userAns!==undefined?q.userAns:S.ans[q.id];
   const scored=q.scored!==undefined?q.scored:scoreQuestion({...q,id:q.id},Object.fromEntries([[q.id,ua]]),Object.fromEntries([[q.id,ua]]));
   const ok=scored===1,ti=TI[q.type]||TI.single;
   let detailHTML='';
@@ -1295,8 +1304,13 @@ function buildQLItem(q,i,idPfx,opts){
       return`<div class="ql-ans-row ${cls}"><div class="ql-key" style="color:${kc}">${k}</div><div style="color:${isR||isU?kc:'var(--muted)'};font-size:13px;line-height:1.55">${esc(q.options[k]||'')}${tag?`<span style="display:block;font-size:10px;font-weight:700;margin-top:2px;font-family:var(--fh);color:${isR?'#34D399':'#FCA5A5'}">${tag}</span>`:''}</div></div>`;
     }).join('');
   }else if(q.type==='order'){
-    const uo=Array.isArray(ua)?ua:[],co=q.correct||[];
-    detailHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+    // ua should be the confirmed answer array; fall back to q.items if somehow missing
+    const uo=Array.isArray(ua)&&ua.length>0?ua:(q.items||[]);
+    const co=q.correct||[];
+    const notAnswered=!Array.isArray(ua)||ua.length===0;
+    detailHTML=`
+    ${notAnswered?`<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#FCD34D">⚠️ No arrangement was confirmed — showing auto-submitted order</div>`:''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
       <div style="font-size:10px;color:var(--muted);font-family:var(--fh);margin-bottom:4px">YOUR ORDER</div>
       <div style="font-size:10px;color:var(--muted);font-family:var(--fh);margin-bottom:4px">CORRECT ORDER</div>
       ${co.map((item,idx)=>{const ui=uo[idx]||'—',po=ui===item;return`<div class="order-result-item ${po?'pos-correct':'pos-wrong'}" style="font-size:12px"><b>${idx+1}.</b> ${esc(ui)}</div><div class="order-result-item pos-correct" style="font-size:12px"><b>${idx+1}.</b> ${esc(item)}</div>`;}).join('')}
