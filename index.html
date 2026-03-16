@@ -1345,7 +1345,11 @@ Rules: domain must be exactly People, Process, or Business Environment. All scen
     let tagged=all.map((q,i)=>({...q,id:`pmp_${ts}_${i}`,_fromBank:false}));
     if(S.wrongBank.length>0){
       const injectCount=Math.min(SPACED_REP_INJECT,S.wrongBank.length);
-      const bankItems=S.wrongBank.slice(0,injectCount).map((q,i)=>({...q,id:`bank_${ts}_${i}`,_fromBank:true}));
+      const bankItems=S.wrongBank.slice(0,injectCount).map((q,i)=>{
+        // Strip old userAns so current session answer is always used fresh
+        const {userAns:_,...rest}=q;
+        return{...rest,id:`bank_${ts}_${i}`,_fromBank:true};
+      });
       // Replace last N AI questions with bank items
       tagged=[...tagged.slice(0,tagged.length-injectCount),...bankItems];
     }
@@ -1646,7 +1650,9 @@ function renderResults(score,total,pct,bD,durSec){
 
 // ── Q LIST ITEM (shared for results, history, bookmarks) ───────────────
 function buildQLItem(q,i,idPfx,opts){
-  const ua=q.userAns!==undefined?q.userAns:S.ans[q.id];
+  // Always prefer current session answer (S.ans) over stored old answer (q.userAns)
+  // This ensures spaced repetition questions show the NEW answer, not the old wrong one
+  const ua=S.ans[q.id]!==undefined?S.ans[q.id]:q.userAns;
   const scored=q.scored!==undefined?q.scored:scoreQuestion({...q,id:q.id},Object.fromEntries([[q.id,ua]]),Object.fromEntries([[q.id,ua]]));
   const ok=scored===1,ti=TI[q.type]||TI.single;
   let detailHTML='';
