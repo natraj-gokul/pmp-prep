@@ -841,34 +841,51 @@ function getSyncBinId(){return localStorage.getItem(K.jb)||''}
 
 // Bundle all syncable data — keep it lean to stay under JSONBin 100KB free limit
 function buildSyncPayload(){
-  // Strip full question snapshots from history (they're large, not needed cross-device)
-  const leanHistory=S.history.map(h=>{
-    const {questions:_,...rest}=h;
-    return rest;
-  });
-  // Strip full question text from wrongBank — keep only what's needed for spaced rep
-  const leanBank=S.wrongBank.map(q=>({
-    id:q.id,type:q.type,domain:q.domain,topic:q.topic,difficulty:q.difficulty,
-    approach:q.approach,question:(q.question||'').slice(0,120),
-    options:q.options,correct:q.correct,tolerance:q.tolerance,
-    explanation:(q.explanation||'').slice(0,200),
-    items:q.items,formula:q.formula,unit:q.unit,
-    seenCount:q.seenCount||1,_fromBank:true
+  // ── History: scores + dates only, NO question text ──
+  const leanHistory=S.history.map(h=>({
+    date:h.date,score:h.score,total:h.total,pct:h.pct,
+    byDomain:h.byDomain,durationSec:h.durationSec
+    // questions deliberately excluded — too large
   }));
+
+  // ── WrongBank: minimal fields only, no options arrays ──
+  const leanBank=S.wrongBank.slice(0,20).map(q=>({
+    id:q.id,type:q.type,domain:q.domain,topic:q.topic,
+    difficulty:q.difficulty,approach:q.approach,
+    q:(q.question||'').slice(0,80), // just a preview
+    correct:q.correct,seenCount:q.seenCount||1
+  }));
+
+  // ── Bookmarks: just IDs + question preview, no full objects ──
+  const leanBookmarks=S.bookmarks.slice(0,30).map(b=>({
+    id:b.id,topic:b.topic,domain:b.domain,
+    q:(b.question||'').slice(0,80),
+    bookmarkedAt:b.bookmarkedAt
+  }));
+
+  // ── TopicScores: keep all (small — just numbers) ──
+  // ── WrongPatterns: counts only, no examples ──
+  const leanPatterns=Object.fromEntries(
+    Object.entries(S.wrongPatterns).slice(0,30).map(([k,v])=>[k,{count:v.count,domain:v.domain}])
+  );
+
+  // ── ExplRatings: keep all (just good/bad strings) ──
+  // Trim to last 100 to cap size
+  const ratingEntries=Object.entries(S.explRatings).slice(-100);
+  const leanRatings=Object.fromEntries(ratingEntries);
+
   return{
-    v:1,
+    v:2, // bumped schema version
     updated:Date.now(),
     deviceId:getDeviceId(),
     history:leanHistory,
     streak:S.streak,
-    topics:S.topics.slice(-100), // last 100 topics only
+    topics:S.topics.slice(-60),
     wrongBank:leanBank,
-    bookmarks:S.bookmarks.map(b=>{const{questions:_,...r}=b;return r;}),
+    bookmarks:leanBookmarks,
     topicScores:S.topicScores,
-    explRatings:S.explRatings,
-    wrongPatterns:Object.fromEntries(
-      Object.entries(S.wrongPatterns).map(([k,v])=>[k,{...v,examples:(v.examples||[]).slice(0,2)}])
-    ),
+    explRatings:leanRatings,
+    wrongPatterns:leanPatterns,
     anthropicKey:localStorage.getItem(K.k)||''
   };
 }
@@ -885,7 +902,7 @@ function mergeData(remote){
   if(!remote||!remote.v)return false;
   let changed=false;
 
-  // History: merge by date string, deduplicate
+  // History: merge by date, deduplicate
   const localDates=new Set(S.history.map(h=>h.date));
   const newFromRemote=(remote.history||[]).filter(h=>!localDates.has(h.date));
   if(newFromRemote.length>0){
@@ -893,11 +910,9 @@ function mergeData(remote){
     ls(K.h,S.history);changed=true;
   }
 
-  // Streak: take whichever has higher current (most up to date)
+  // Streak: take whichever has more total sessions
   const rs=remote.streak||{};
-  if(rs.totalSessions>(S.streak.totalSessions||0)){
-    // Remote has more sessions — take remote streak but keep local's today progress
-    const todaySess=S.history.filter(h=>new Date(h.date).toDateString()===todayStr()).length;
+  if((rs.totalSessions||0)>(S.streak.totalSessions||0)){
     S.streak={...rs,current:Math.max(rs.current||0,S.streak.current||0)};
     ls(K.s,S.streak);changed=true;
   }
@@ -906,17 +921,24 @@ function mergeData(remote){
   const topicSet=new Set([...S.topics,...(remote.topics||[])]);
   if(topicSet.size>S.topics.length){S.topics=[...topicSet];ls(K.t,S.topics);changed=true;}
 
-  // WrongBank: merge unique by question text
-  const bankQ=new Set(S.wrongBank.map(q=>q.question));
-  const newBank=(remote.wrongBank||[]).filter(q=>!bankQ.has(q.question));
-  if(newBank.length>0){
-    S.wrongBank=[...S.wrongBank,...newBank].slice(0,40);
-    ls(K.wb,S.wrongBank);changed=true;
+  // WrongBank: merge by id (v2 lean format has no options — skip if lean)
+  if(remote.v>=2){
+    // v2: lean bank items — just update seenCount for existing, skip adding (no full q data)
+    const bankMap=Object.fromEntries(S.wrongBank.map(q=>[q.id,q]));
+    (remote.wrongBank||[]).forEach(rb=>{
+      if(bankMap[rb.id])bankMap[rb.id].seenCount=Math.max(bankMap[rb.id].seenCount||1,rb.seenCount||1);
+    });
+    S.wrongBank=Object.values(bankMap);ls(K.wb,S.wrongBank);
+  } else {
+    // v1: had full question data
+    const bankQ=new Set(S.wrongBank.map(q=>q.question));
+    const newBank=(remote.wrongBank||[]).filter(q=>q.options&&!bankQ.has(q.question));
+    if(newBank.length>0){S.wrongBank=[...S.wrongBank,...newBank].slice(0,40);ls(K.wb,S.wrongBank);changed=true;}
   }
 
-  // Bookmarks: merge unique by id
+  // Bookmarks: merge by id (lean in v2 — just ids, no full question objects)
   const bmIds=new Set(S.bookmarks.map(b=>b.id));
-  const newBm=(remote.bookmarks||[]).filter(b=>!bmIds.has(b.id));
+  const newBm=(remote.bookmarks||[]).filter(b=>!bmIds.has(b.id)&&b.bookmarkedAt);
   if(newBm.length>0){S.bookmarks=[...S.bookmarks,...newBm];ls(K.bm,S.bookmarks);changed=true;}
 
   // TopicScores: merge by taking max total per topic
@@ -928,9 +950,8 @@ function mergeData(remote){
   });
   if(tsChanged){ls(K.ts,S.topicScores);changed=true;}
 
-  // ExplRatings: merge (remote wins on conflicts)
-  const rer=remote.explRatings||{};
-  const mergedEr={...rer,...S.explRatings}; // local wins
+  // ExplRatings: local wins
+  const mergedEr={...(remote.explRatings||{}),...S.explRatings};
   if(JSON.stringify(mergedEr)!==JSON.stringify(S.explRatings)){
     S.explRatings=mergedEr;ls(K.er,S.explRatings);changed=true;
   }
@@ -938,12 +959,12 @@ function mergeData(remote){
   // WrongPatterns: merge counts
   const rwp=remote.wrongPatterns||{};
   Object.entries(rwp).forEach(([topic,rv])=>{
-    if(!S.wrongPatterns[topic]){S.wrongPatterns[topic]=rv;changed=true;}
-    else if(rv.count>S.wrongPatterns[topic].count){S.wrongPatterns[topic].count=rv.count;changed=true;}
+    if(!S.wrongPatterns[topic]){S.wrongPatterns[topic]={count:rv.count,domain:rv.domain||''};changed=true;}
+    else if((rv.count||0)>(S.wrongPatterns[topic].count||0)){S.wrongPatterns[topic].count=rv.count;changed=true;}
   });
   if(changed)ls(K.wp,S.wrongPatterns);
 
-  // Anthropic key: if remote has it and local doesn't, save it
+  // Anthropic key: if remote has it and local doesn't
   if(remote.anthropicKey&&!localStorage.getItem(K.k)){
     localStorage.setItem(K.k,remote.anthropicKey);changed=true;
   }
@@ -1362,8 +1383,8 @@ Rules: domain must be exactly People, Process, or Business Environment. All scen
     if(S.wrongBank.length>0){
       const injectCount=Math.min(SPACED_REP_INJECT,S.wrongBank.length);
       const bankItems=S.wrongBank.slice(0,injectCount).map((q,i)=>{
-        // Strip old userAns so current session answer is always used fresh
-        const {userAns:_,...rest}=q;
+        // Strip old userAns and scored so current session answer is always used fresh
+        const {userAns:_,scored:__,...rest}=q;
         return{...rest,id:`bank_${ts}_${i}`,_fromBank:true};
       });
       // Replace last N AI questions with bank items
