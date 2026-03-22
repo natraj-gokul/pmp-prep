@@ -1522,47 +1522,83 @@ async function api(sys,msg){
   return d.content.filter(b=>b.type==='text').map(b=>b.text).join('');
 }
 function parseQ(raw){
-  // 1. Extract the outermost JSON array
+  // Extract between first [ and last ]
   const s=raw.indexOf('['),e=raw.lastIndexOf(']');
   if(s===-1||e<=s)throw new Error('No JSON array found — please try again');
   let text=raw.slice(s,e+1);
 
-  // 2. Remove any control characters that break JSON parsers
-  // (newlines inside string values are the #1 cause of parse failures)
-  // Strategy: replace literal newlines/tabs inside JSON string values only
-  text=text.replace(/[\u0000-\u001F\u007F]/g,(c,idx)=>{
-    // Allow structural whitespace outside strings — approximate by just escaping all
-    const map={'\n':'\\n','\r':'\\r','\t':'\\t'};
-    return map[c]||'';
-  });
+  // Strategy 1: direct parse
+  try{return JSON.parse(text)}catch(e0){}
 
-  // 3. Try direct parse first
-  try{return JSON.parse(text)}catch(e1){}
-
-  // 4. Fix unescaped apostrophes inside JSON strings — common with longer scenarios
-  // Replace ' that are not already escaped and appear inside string values
+  // Strategy 2: aggressive string sanitisation
+  // Process character by character, tracking whether we're inside a JSON string
+  // and escaping anything that would break the parser
   try{
-    const fixed=text.replace(/"(?:[^"\\]|\\.)*"/g,match=>
-      match.replace(/(?<!\\)'/g,"\\'")
-    );
-    return JSON.parse(fixed);
+    let out='',inStr=false,esc=false;
+    for(let i=0;i<text.length;i++){
+      const c=text[i];
+      if(esc){out+=c;esc=false;continue}
+      if(c==='\\'&&inStr){out+=c;esc=true;continue}
+      if(c==='"'){inStr=!inStr;out+=c;continue}
+      if(inStr){
+        // Inside a string — escape anything dangerous
+        if(c==='\n'){out+='\\n';continue}
+        if(c==='\r'){out+='\\r';continue}
+        if(c==='\t'){out+='\\t';continue}
+        // Replace smart/curly quotes with straight quotes
+        if(c==='\u201C'||c==='\u201D'){out+='\\"';continue}
+        if(c==='\u2018'||c==='\u2019'){out+="'";continue}
+        // Replace en/em dash with regular dash
+        if(c==='\u2013'||c==='\u2014'){out+='-';continue}
+        out+=c;
+      } else {
+        out+=c;
+      }
+    }
+    return JSON.parse(out);
+  }catch(e1){}
+
+  // Strategy 3: remove trailing commas before } or ]
+  try{
+    const cleaned=text
+      .replace(/,\s*}/g,'}')
+      .replace(/,\s*]/g,']')
+      .replace(/[\u201C\u201D]/g,'"')
+      .replace(/[\u2018\u2019]/g,"'")
+      .replace(/[\u2013\u2014]/g,'-');
+    return JSON.parse(cleaned);
   }catch(e2){}
 
-  // 5. Object-by-object extraction fallback — pull each {...} block individually
+  // Strategy 4: object-by-object extraction — most robust fallback
   const objects=[];
-  let depth=0,start=-1,inStr=false,escape=false;
+  let depth=0,start=-1,inString=false,escaped=false;
   for(let i=0;i<text.length;i++){
     const c=text[i];
-    if(escape){escape=false;continue}
-    if(c==='\\'&&inStr){escape=true;continue}
-    if(c==='"'){inStr=!inStr;continue}
-    if(inStr)continue;
+    if(escaped){escaped=false;continue}
+    if(c==='\\'&&inString){escaped=true;continue}
+    if(c==='"'){inString=!inString;continue}
+    if(inString)continue;
     if(c==='{'){if(depth===0)start=i;depth++;}
     else if(c==='}'){
       depth--;
       if(depth===0&&start>=0){
+        // Try to parse this object with sanitisation
+        let chunk=text.slice(start,i+1);
         try{
-          const obj=JSON.parse(text.slice(start,i+1));
+          // Quick sanitise
+          let out2='',ins=false,es=false;
+          for(let j=0;j<chunk.length;j++){
+            const ch=chunk[j];
+            if(es){out2+=ch;es=false;continue}
+            if(ch==='\\'&&ins){out2+=ch;es=true;continue}
+            if(ch==='"'){ins=!ins;out2+=ch;continue}
+            if(ins){
+              if(ch==='\n'){out2+='\\n';continue}
+              if(ch==='\r'||ch==='\t'){continue}
+              out2+=ch;
+            }else{out2+=ch;}
+          }
+          const obj=JSON.parse(out2);
           if(obj&&obj.type&&obj.question)objects.push(obj);
         }catch(e){}
         start=-1;
@@ -1571,7 +1607,7 @@ function parseQ(raw){
   }
   if(objects.length>=4)return objects;
 
-  throw new Error('Could not parse AI response — please try again');
+  throw new Error('Could not parse AI response — please try again (the AI returned malformed data)');
 }
 
 // ── START SESSION ──────────────────────────────────────────────────────
@@ -1586,33 +1622,29 @@ async function startSession(){
   const weakTopics=getWeakTopics();
   const weakCtx=weakTopics.length>0?`\nWEAK AREAS — generate MORE questions on these topics (student scores <60%): ${weakTopics.map(w=>w.topic+'('+w.pct+'%)').join(', ')}. Prioritise these heavily.`:'';
 
-  const sys=`You are an expert PMP exam question writer replicating the EXACT style of the current PMI PMP exam (2021+ format, PMBOK 7 + Agile Practice Guide).
+  const sys=`You are an expert PMP exam question writer. Output ONLY a raw JSON array of 15 questions. No markdown. No code fences. No explanation outside the array.
 
-CRITICAL RULES — follow every one precisely:
+STRICT JSON SAFETY - these rules prevent parse errors:
+- NO apostrophes anywhere. Write "do not" not "don't", "it is" not "it's", "the team" not "the team's".
+- NO newlines inside string values. Each field value must be on one continuous line.
+- NO smart or curly quotes. Use only straight double quotes for JSON structure.
+- NO em-dashes or en-dashes. Use a hyphen instead.
+- Escape any double quote inside a string value as \\".
 
-1. SCENARIO LENGTH: Every question stem MUST be 80–180 words. Set a realistic project scene with a named PM, project type, team size, timeline pressure, and a specific problem or decision point. Never write short 1–2 sentence questions.
+QUESTION STYLE (PMP 2021+ format):
+- Every question: 60-100 word scenario. Name the PM, describe the project and the specific problem.
+- All 4-5 options must be plausible. Wrong answers = real-world PM mistakes, not obvious nonsense.
+- Mix: 7 Agile, 5 Hybrid, 3 Predictive scenarios per batch.
+- Explanation: 40+ words. Why is correct answer best? Why are wrong answers tempting?
 
-2. ANSWER QUALITY — "BEST ANSWER" TRAP: All 4–5 options must be plausible and partially correct. A test-taker who knows the topic should still have to think carefully. Never include obviously wrong distractors. The wrong options should represent common real-world mistakes or less-optimal-but-valid approaches.
+DISTRIBUTION per 15 questions: 9 single, 4 multi, 2 order. No fillblank.
 
-3. APPROACH MIX: Across 15 questions, generate: 7 Agile/Scrum scenarios, 5 Hybrid scenarios, 3 Predictive/Waterfall scenarios. Reflect the real exam's ~50% agile weighting.
+SCHEMAS:
+single: {"type":"single","id":"q01","domain":"People","topic":"Conflict Resolution","difficulty":"Medium","approach":"Agile","question":"scenario text here","options":{"A":"option","B":"option","C":"option","D":"option"},"correct":"C","explanation":"explanation here"}
+multi: {"type":"multi","id":"q02","domain":"Process","topic":"Sprint Planning","difficulty":"Hard","approach":"Agile","question":"scenario text here. Select TWO.","options":{"A":"option","B":"option","C":"option","D":"option","E":"option"},"correct":["B","D"],"explanation":"explanation here"}
+order: {"type":"order","id":"q03","domain":"Process","topic":"Risk Management","difficulty":"Medium","approach":"Predictive","question":"scenario text here. Arrange the following steps in the correct order:","items":["Step A","Step B","Step C","Step D"],"correct":["Step C","Step A","Step D","Step B"],"explanation":"explanation here"}
 
-4. QUESTION TYPE DISTRIBUTION per batch of 15:
-   - 9 of type "single" (4 options A-D, one best answer)
-   - 4 of type "multi" (5 options A-E) — for multi, sometimes say "Select TWO" but also sometimes say "Select all that apply" with 2–4 correct answers
-   - 2 of type "order" (arrange 4–5 steps in correct sequence)
-   - 0 fillblank unless batch explicitly asks for it — replace with situational single questions instead
-
-5. EXPLANATION: Must explain WHY the correct answer is best AND why each wrong answer is tempting but incorrect. Min 60 words.
-
-6. TOPIC COVERAGE per question — rotate through: servant leadership, conflict resolution, stakeholder engagement, risk response, change control, scope creep, sprint ceremonies, retrospectives, hybrid governance, benefits realisation, team performance, procurement, resource management, communications planning, quality audits, agile estimation, WBS, lessons learned, EVM interpretation, PMO, RACI, OPA/EEF.
-
-SCHEMAS (do not deviate):
-single:    {"type":"single","id":"q01","domain":"People","topic":"Conflict Resolution","difficulty":"Medium","approach":"Agile","question":"[80-180 word scenario]","options":{"A":"[plausible]","B":"[plausible]","C":"[plausible, best answer]","D":"[plausible]"},"correct":"C","explanation":"[60+ words explaining why C is best and why A/B/D are tempting but wrong]"}
-multi:     {"type":"multi","id":"q02","domain":"Process","topic":"Sprint Planning","difficulty":"Hard","approach":"Agile","question":"[80-180 word scenario] Select TWO.","options":{"A":"...","B":"...","C":"...","D":"...","E":"..."},"correct":["B","D"],"explanation":"[60+ words]"}
-order:     {"type":"order","id":"q03","domain":"Process","topic":"Risk Management","difficulty":"Medium","approach":"Predictive","question":"[Scenario context]. Arrange the following steps in the correct order:","items":["Step A","Step B","Step C","Step D"],"correct":["Step C","Step A","Step D","Step B"],"explanation":"[60+ words]"}
-
-Domain must be exactly: People, Process, or Business Environment.
-CRITICAL JSON RULES: Use \\n for line breaks inside strings. Escape all apostrophes as \\u0027 or avoid them entirely — write "do not" instead of "don't", "it is" instead of "it's". Never use unescaped quotes inside string values. Output ONLY the raw JSON array, no markdown fences, no explanation text.`;
+domain must be exactly: People OR Process OR Business Environment`;
 
   const batches=[
     `Focus: People domain — servant leadership, coaching underperforming team members, resolving conflict between developers and stakeholders, motivating cross-functional agile teams, virtual team challenges, emotional intelligence in difficult conversations. Also include 2 Process questions on scope and schedule management. ${weakCtx}`,
@@ -1683,22 +1715,23 @@ async function startDrillSession(){
   const topicList=weakTopics.slice(0,5).map(w=>`${w.topic} (${w.pct}%)`).join(', ');
   $('gen-status').textContent='Building targeted drill…';
 
-  const sys=`You are an expert PMP exam question writer replicating the EXACT style of the current PMI PMP exam (2021+ format, PMBOK 7 + Agile Practice Guide).
+  const sys=`You are an expert PMP exam question writer. Output ONLY a raw JSON array of 15 questions. No markdown. No code fences. No text outside the array.
 
-CRITICAL RULES:
-1. SCENARIO LENGTH: Every question stem MUST be 80–180 words. Realistic project context with a named PM, project type, team, timeline pressure, and a specific problem.
-2. ANSWER QUALITY: All options must be plausible. The wrong answers should be common real-world mistakes or valid-but-suboptimal choices. Never include obviously wrong distractors.
-3. APPROACH MIX: Mix Agile, Hybrid, and Predictive scenarios naturally.
-4. EXPLANATION: Min 60 words. Explain WHY correct is best AND why each wrong answer is tempting but incorrect.
-5. Generate ONLY the JSON array. No text outside it. No markdown.
+STRICT JSON SAFETY:
+- NO apostrophes. Write "do not" not "don't", "it is" not "it's".
+- NO newlines inside string values. Every field on one continuous line.
+- NO smart quotes, em-dashes. Use straight quotes and hyphens only.
+
+QUESTION STYLE: 60-100 word scenarios. Name the PM and project. All options plausible - wrong answers are real PM mistakes. Mix Agile, Hybrid, Predictive. Explanations 40+ words.
+
+DISTRIBUTION: 9 single, 4 multi, 2 order. No fillblank.
 
 SCHEMAS:
-single: {"type":"single","id":"q01","domain":"People","topic":"...","difficulty":"Hard","approach":"Agile","question":"[80-180 word scenario]","options":{"A":"...","B":"...","C":"...","D":"..."},"correct":"B","explanation":"[60+ words]"}
-multi:  {"type":"multi","id":"q02","domain":"Process","topic":"...","difficulty":"Hard","approach":"Hybrid","question":"[80-180 word scenario] Select TWO.","options":{"A":"...","B":"...","C":"...","D":"...","E":"..."},"correct":["A","C"],"explanation":"[60+ words]"}
-order:  {"type":"order","id":"q03","domain":"Process","topic":"...","difficulty":"Hard","approach":"Predictive","question":"[Scenario]. Arrange the following steps in the correct order:","items":["Step A","Step B","Step C","Step D"],"correct":["Step B","Step D","Step A","Step C"],"explanation":"[60+ words]"}
+single: {"type":"single","id":"q01","domain":"People","topic":"...","difficulty":"Hard","approach":"Agile","question":"scenario","options":{"A":"...","B":"...","C":"...","D":"..."},"correct":"B","explanation":"..."}
+multi: {"type":"multi","id":"q02","domain":"Process","topic":"...","difficulty":"Hard","approach":"Hybrid","question":"scenario. Select TWO.","options":{"A":"...","B":"...","C":"...","D":"...","E":"..."},"correct":["A","C"],"explanation":"..."}
+order: {"type":"order","id":"q03","domain":"Process","topic":"...","difficulty":"Hard","approach":"Predictive","question":"scenario. Arrange in correct order:","items":["Step A","Step B","Step C","Step D"],"correct":["Step B","Step D","Step A","Step C"],"explanation":"..."}
 
-Domain must be exactly: People, Process, or Business Environment. Generate exactly 15 questions.
-CRITICAL JSON RULES: Use \\n for line breaks inside strings. Escape all apostrophes as \\u0027 or avoid them — write "do not" instead of "don't". Never use unescaped quotes inside string values. Output ONLY the raw JSON array, no markdown fences.`;
+domain must be exactly: People OR Process OR Business Environment`;
 
   try{
     const raw=await api(sys,`Generate 15 targeted questions EXCLUSIVELY on these weak areas: ${topicList}. All questions must be Medium-Hard difficulty. Use a mix of single, multi, and order types. Make the scenario stems 80–180 words each. Make wrong answers highly plausible — typical real-world mistakes a PM might make.`);
