@@ -1287,14 +1287,24 @@ async function restoreFromSync(){
   err.textContent='';status.textContent='';
   if(!jkVal){err.textContent='Please paste your JSONBin X-MASTER-KEY.';return}
   if(!jkVal.startsWith('$2a$')&&!jkVal.startsWith('$2b$')){err.textContent='X-MASTER-KEY should start with $2a$ or $2b$…';return}
-  if(!binVal){err.textContent='Please enter your Bin ID (shown on the ☁️ Sync screen of your other device).';return}
+  if(!binVal){err.textContent='Please enter your Bin ID.';return}
   status.textContent='☁️ Fetching your data…';
   try{
-    const res=await fetch(`${JSONBIN_URL}/b/${binVal}/latest`,{headers:{'X-Master-Key':jkVal}});
-    if(!res.ok){const t=await res.text();throw new Error('Bin not found — check your Bin ID. ('+res.status+')')}
-    const d=await res.json();
-    const data=d.record;
-    if(!data||!data.v){err.textContent='This bin does not contain PMPPrep data. Check your Bin ID.';status.textContent='';return}
+    const res=await fetch(`${JSONBIN_URL}/b/${binVal}/latest`,{
+      headers:{'X-Master-Key':jkVal,'X-Bin-Meta':false}
+    });
+    const rawText=await res.text();
+    if(!res.ok){throw new Error('HTTP '+res.status+' — check your Bin ID and Key.')}
+    let d;
+    try{d=JSON.parse(rawText)}catch(e){throw new Error('Invalid response from JSONBin.')}
+    // JSONBin wraps in {record:...} OR returns data directly depending on headers
+    const data=d.record||d;
+    // Accept if it has any known PMPPrep field
+    const isPMPData=data&&(data.v||data.history||data.streak||data.anthropicKey);
+    if(!isPMPData){
+      err.textContent='Bin found but no PMPPrep data inside. Raw: '+rawText.slice(0,80);
+      status.textContent='';return;
+    }
     // Save keys
     localStorage.setItem(K.jk,jkVal);
     localStorage.setItem(K.jb,binVal);
@@ -1313,8 +1323,8 @@ async function restoreFromSync(){
         updateSyncStrip('✅ Restored from sync',true);
       },1000);
     }else{
-      status.textContent='⚠️ Data synced but no Anthropic API key found. Please enter it above.';
-      localStorage.removeItem(K.jk);localStorage.removeItem(K.jb);
+      status.textContent='⚠️ Data synced but no Anthropic API key found in cloud. Please enter it in the field above.';
+      // Keep sync keys saved so user can go to dashboard manually after entering key
     }
   }catch(e){
     err.textContent='❌ '+e.message;status.textContent='';
