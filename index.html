@@ -1521,7 +1521,58 @@ async function api(sys,msg){
   if(d.error){if(d.error.type==='authentication_error'){localStorage.removeItem(K.k);openApiKey();throw new Error('Invalid API key')}throw new Error(d.error.message)}
   return d.content.filter(b=>b.type==='text').map(b=>b.text).join('');
 }
-function parseQ(raw){const s=raw.indexOf('['),e=raw.lastIndexOf(']');if(s===-1||e<=s)throw new Error('No JSON array — please try again');return JSON.parse(raw.slice(s,e+1))}
+function parseQ(raw){
+  // 1. Extract the outermost JSON array
+  const s=raw.indexOf('['),e=raw.lastIndexOf(']');
+  if(s===-1||e<=s)throw new Error('No JSON array found — please try again');
+  let text=raw.slice(s,e+1);
+
+  // 2. Remove any control characters that break JSON parsers
+  // (newlines inside string values are the #1 cause of parse failures)
+  // Strategy: replace literal newlines/tabs inside JSON string values only
+  text=text.replace(/[\u0000-\u001F\u007F]/g,(c,idx)=>{
+    // Allow structural whitespace outside strings — approximate by just escaping all
+    const map={'\n':'\\n','\r':'\\r','\t':'\\t'};
+    return map[c]||'';
+  });
+
+  // 3. Try direct parse first
+  try{return JSON.parse(text)}catch(e1){}
+
+  // 4. Fix unescaped apostrophes inside JSON strings — common with longer scenarios
+  // Replace ' that are not already escaped and appear inside string values
+  try{
+    const fixed=text.replace(/"(?:[^"\\]|\\.)*"/g,match=>
+      match.replace(/(?<!\\)'/g,"\\'")
+    );
+    return JSON.parse(fixed);
+  }catch(e2){}
+
+  // 5. Object-by-object extraction fallback — pull each {...} block individually
+  const objects=[];
+  let depth=0,start=-1,inStr=false,escape=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(escape){escape=false;continue}
+    if(c==='\\'&&inStr){escape=true;continue}
+    if(c==='"'){inStr=!inStr;continue}
+    if(inStr)continue;
+    if(c==='{'){if(depth===0)start=i;depth++;}
+    else if(c==='}'){
+      depth--;
+      if(depth===0&&start>=0){
+        try{
+          const obj=JSON.parse(text.slice(start,i+1));
+          if(obj&&obj.type&&obj.question)objects.push(obj);
+        }catch(e){}
+        start=-1;
+      }
+    }
+  }
+  if(objects.length>=4)return objects;
+
+  throw new Error('Could not parse AI response — please try again');
+}
 
 // ── START SESSION ──────────────────────────────────────────────────────
 async function startSession(){
@@ -1561,7 +1612,7 @@ multi:     {"type":"multi","id":"q02","domain":"Process","topic":"Sprint Plannin
 order:     {"type":"order","id":"q03","domain":"Process","topic":"Risk Management","difficulty":"Medium","approach":"Predictive","question":"[Scenario context]. Arrange the following steps in the correct order:","items":["Step A","Step B","Step C","Step D"],"correct":["Step C","Step A","Step D","Step B"],"explanation":"[60+ words]"}
 
 Domain must be exactly: People, Process, or Business Environment.
-Generate ONLY the JSON array. No text outside it. No markdown fences.`;
+CRITICAL JSON RULES: Use \\n for line breaks inside strings. Escape all apostrophes as \\u0027 or avoid them entirely — write "do not" instead of "don't", "it is" instead of "it's". Never use unescaped quotes inside string values. Output ONLY the raw JSON array, no markdown fences, no explanation text.`;
 
   const batches=[
     `Focus: People domain — servant leadership, coaching underperforming team members, resolving conflict between developers and stakeholders, motivating cross-functional agile teams, virtual team challenges, emotional intelligence in difficult conversations. Also include 2 Process questions on scope and schedule management. ${weakCtx}`,
@@ -1573,9 +1624,20 @@ Generate ONLY the JSON array. No text outside it. No markdown fences.`;
   try{
     for(let i=0;i<3;i++){
       $('gen-status').textContent=`Batch ${i+1}/3 — generating ${i*15}/45 questions…`;
-      const raw=await api(sys,`Session #${n+1}, difficulty: ${diff}. ${ctx}\n\nGenerate 15 questions for: ${batches[i]}`);
-      const parsed=parseQ(raw);
-      if(!Array.isArray(parsed)||parsed.length<4)throw new Error(`Batch ${i+1} failed — please try again`);
+      let parsed=null;
+      // Try up to 2 times per batch in case of parse failure
+      for(let attempt=0;attempt<2;attempt++){
+        try{
+          const raw=await api(sys,`Session #${n+1}, difficulty: ${diff}. ${ctx}\n\nGenerate 15 questions for: ${batches[i]}`);
+          parsed=parseQ(raw);
+          if(Array.isArray(parsed)&&parsed.length>=4)break;
+        }catch(parseErr){
+          if(attempt===1)throw new Error(`Batch ${i+1} failed after 2 attempts — please try again`);
+          $('gen-status').textContent=`Batch ${i+1}/3 — retrying…`;
+          await new Promise(r=>setTimeout(r,1000));
+        }
+      }
+      if(!parsed||parsed.length<4)throw new Error(`Batch ${i+1} returned too few questions — please try again`);
       all=all.concat(parsed);
     }
     if(all.length<20)throw new Error('Not enough questions generated — please try again');
@@ -1635,7 +1697,8 @@ single: {"type":"single","id":"q01","domain":"People","topic":"...","difficulty"
 multi:  {"type":"multi","id":"q02","domain":"Process","topic":"...","difficulty":"Hard","approach":"Hybrid","question":"[80-180 word scenario] Select TWO.","options":{"A":"...","B":"...","C":"...","D":"...","E":"..."},"correct":["A","C"],"explanation":"[60+ words]"}
 order:  {"type":"order","id":"q03","domain":"Process","topic":"...","difficulty":"Hard","approach":"Predictive","question":"[Scenario]. Arrange the following steps in the correct order:","items":["Step A","Step B","Step C","Step D"],"correct":["Step B","Step D","Step A","Step C"],"explanation":"[60+ words]"}
 
-Domain must be exactly: People, Process, or Business Environment. Generate exactly 15 questions.`;
+Domain must be exactly: People, Process, or Business Environment. Generate exactly 15 questions.
+CRITICAL JSON RULES: Use \\n for line breaks inside strings. Escape all apostrophes as \\u0027 or avoid them — write "do not" instead of "don't". Never use unescaped quotes inside string values. Output ONLY the raw JSON array, no markdown fences.`;
 
   try{
     const raw=await api(sys,`Generate 15 targeted questions EXCLUSIVELY on these weak areas: ${topicList}. All questions must be Medium-Hard difficulty. Use a mix of single, multi, and order types. Make the scenario stems 80–180 words each. Make wrong answers highly plausible — typical real-world mistakes a PM might make.`);
