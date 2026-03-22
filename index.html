@@ -37,6 +37,35 @@ body{touch-action:pan-y}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes readinessGrow{from{width:0}to{width:var(--rw)}}
+/* ── DIM MODE ─────────────────────────────────────────────────────── */
+.dim-mode{filter:brightness(.72) contrast(1.05)}
+/* ── MODAL OVERLAY ───────────────────────────────────────────────── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:999;display:flex;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(4px)}
+.modal-box{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:28px 24px;width:100%;max-width:360px}
+.modal-title{font-family:var(--fh);font-size:18px;font-weight:800;color:#EDF2F7;margin-bottom:8px}
+.modal-sub{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:18px}
+.modal-input{width:100%;background:#0C1221;border:1px solid var(--border);border-radius:10px;padding:13px 14px;color:#EDF2F7;font-family:var(--fh);font-size:15px;outline:none;transition:border-color .2s;margin-bottom:14px}
+.modal-input:focus{border-color:var(--gold)}
+.modal-actions{display:flex;gap:10px}
+/* ── QTYPE STATS ─────────────────────────────────────────────────── */
+.qtype-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+@media(max-width:440px){.qtype-grid{grid-template-columns:repeat(2,1fr)}}
+.qtype-cell{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 10px;text-align:center}
+.qtype-icon{font-size:18px;margin-bottom:4px}
+.qtype-pct{font-family:var(--fh);font-size:18px;font-weight:800;line-height:1}
+.qtype-label{font-size:10px;color:var(--muted);margin-top:2px}
+.qtype-bar{height:3px;background:#1A2540;border-radius:2px;margin-top:6px;overflow:hidden}
+.qtype-bar-f{height:100%;border-radius:2px;transition:width 1s ease}
+/* ── REF SEARCH ──────────────────────────────────────────────────── */
+.ref-search{width:100%;background:#0C1221;border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:#EDF2F7;font-family:var(--fb);font-size:14px;outline:none;transition:border-color .2s;margin-bottom:16px}
+.ref-search:focus{border-color:var(--gold)}.ref-search::placeholder{color:var(--muted)}
+.ref-highlight{background:rgba(245,166,35,.25);border-radius:2px;padding:0 2px}
+/* ── ON-TRACK BADGE ──────────────────────────────────────────────── */
+.ontrack-badge{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:3px 10px;font-size:11px;font-family:var(--fh);font-weight:700;margin-top:5px}
+/* ── DRILL BUTTON ────────────────────────────────────────────────── */
+.drill-btn{background:linear-gradient(135deg,#EF4444,#DC2626);color:#fff;font-family:var(--fh);font-weight:800;border:none;border-radius:10px;cursor:pointer;font-size:13px;padding:10px 16px;display:inline-flex;align-items:center;gap:6px;min-height:40px;touch-action:manipulation;transition:all .18s;margin-top:10px;width:100%}
+.drill-btn:hover{box-shadow:0 6px 20px rgba(239,68,68,.3);transform:translateY(-1px)}
+.drill-btn:active{transform:scale(.97);opacity:.9}
 
 /* ── LAYOUT ─────────────────────────────────────────────────────── */
 .topbar{background:linear-gradient(180deg,#0C1221,var(--bg));border-bottom:1px solid var(--border);padding:calc(var(--safe-top)+14px) var(--pad) 14px;flex-shrink:0}
@@ -355,9 +384,15 @@ body{touch-action:pan-y}
         <div id="today-date" style="font-size:11px;color:var(--muted);margin-top:3px"></div>
       </div>
       <div class="ed">
-        <div class="edn" id="days-left">60</div>
-        <div class="edl">Days to exam</div>
+        <div style="display:flex;align-items:baseline;gap:6px;justify-content:flex-end">
+          <div class="edn" id="days-left" style="cursor:pointer" onclick="openExamDateModal()" title="Tap to set exam date">60</div>
+          <div style="text-align:right">
+            <div class="edl">Days to exam</div>
+            <div id="ontrack-badge"></div>
+          </div>
+        </div>
         <div style="margin-top:6px;display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap">
+          <button class="btn-o" onclick="toggleDim()" id="dim-btn" style="font-size:11px;padding:4px 9px;min-height:28px;opacity:.6" title="Toggle dim mode">🌙</button>
           <button class="btn-o" onclick="openApiKey()" style="font-size:11px;padding:4px 9px;min-height:28px;opacity:.6">🔑</button>
           <button class="btn-o" id="sync-nav-btn" onclick="ss('sync');renderSyncScreen()" style="font-size:11px;padding:4px 9px;min-height:28px">☁️ Sync</button>
           <button class="btn-o" onclick="ss('reference');showRef('ev')" style="font-size:11px;padding:4px 9px;min-height:28px">📚 Ref</button>
@@ -379,6 +414,11 @@ body{touch-action:pan-y}
       <div id="error-toast" class="err" style="display:none"></div>
       <!-- Readiness -->
       <div id="readiness-card-wrap"></div>
+      <!-- Question Type Performance -->
+      <div id="qtype-stats-wrap" style="display:none">
+        <div class="sec" style="margin-bottom:10px">Performance by Question Type</div>
+        <div class="qtype-grid" id="qtype-grid"></div>
+      </div>
       <!-- Stats -->
       <div class="sg">
         <div class="sc"><div class="si">🔥</div><div class="sv" id="stat-streak" style="color:var(--gold)">0</div><div class="su" style="color:rgba(245,166,35,.6)">day streak</div><div class="sl">Current Streak</div></div>
@@ -420,6 +460,7 @@ body{touch-action:pan-y}
             <div class="card" style="padding:18px">
               <div class="sec">⚠️ Weak Areas (score &lt;60%) — auto-targeted</div>
               <div id="weak-areas-list"></div>
+              <button class="drill-btn" onclick="startDrillSession()" id="drill-btn" style="display:none">🎯 Drill Weak Areas — 15 Focused Questions</button>
             </div>
           </div>
           <!-- History row -->
@@ -454,8 +495,8 @@ body{touch-action:pan-y}
 <div id="screen-generating" class="screen">
   <div class="gs">
     <div style="font-size:64px;margin-bottom:20px;animation:glow 2s ease infinite">🧠</div>
-    <div class="gt">Crafting Your Questions</div>
-    <div class="gd">Generating 45 questions with weak area targeting + spaced repetition across all 4 real exam formats. This takes about 30 seconds.</div>
+    <div class="gt" id="gen-title">Crafting Your Questions</div>
+    <div class="gd" id="gen-desc">Generating 45 questions with weak area targeting + spaced repetition across all 4 real exam formats. This takes about 30 seconds.</div>
     <div class="gst" id="gen-status">Connecting to AI…</div>
     <div class="dots">
       <div class="dot" style="animation-delay:0s"></div><div class="dot" style="animation-delay:.25s"></div>
@@ -526,6 +567,7 @@ body{touch-action:pan-y}
     </div>
   </div>
   <div class="scroll-area"><div class="inner">
+    <input class="ref-search" id="ref-search" placeholder="🔍 Search formulas, principles, agile terms…" oninput="filterRef(this.value)"/>
     <div class="ref-tabs">
       <button class="ref-tab active" onclick="showRef('ev')">📐 EV Formulas</button>
       <button class="ref-tab" onclick="showRef('pmbok')">📘 PMBOK 7</button>
@@ -612,13 +654,27 @@ body{touch-action:pan-y}
   </div></div>
 </div>
 
+<!-- EXAM DATE MODAL -->
+<div id="exam-date-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeExamDateModal()">
+  <div class="modal-box">
+    <div class="modal-title">📅 Set Your Exam Date</div>
+    <div class="modal-sub">Enter your PMP exam date to get a live countdown and personalised on-track status.</div>
+    <input class="modal-input" id="exam-date-input" type="date" />
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6">💡 PMI exam format changes in early July 2026 — aim to sit before then!</div>
+    <div class="modal-actions">
+      <button class="btn-g" onclick="saveExamDate()" style="flex:1;justify-content:center">Save Date →</button>
+      <button class="btn-o" onclick="closeExamDateModal()" style="flex-shrink:0">Cancel</button>
+    </div>
+  </div>
 </div>
-<script>
+
+</div>
 // ── CONSTANTS ──────────────────────────────────────────────────────────
 const K={t:'pmp-topics-v6',h:'pmp-history-v6',s:'pmp-streak-v6',k:'pmp-apikey-v1',
          wb:'pmp-wrongbank-v1',bm:'pmp-bookmarks-v1',ts:'pmp-topicscores-v1',
          er:'pmp-explratings-v1',wp:'pmp-wrongpatterns-v1',
-         jk:'pmp-jsonbin-key',jb:'pmp-jsonbin-id',lastSync:'pmp-last-sync'};
+         jk:'pmp-jsonbin-key',jb:'pmp-jsonbin-id',lastSync:'pmp-last-sync',
+         ed:'pmp-examdate',qts:'pmp-qtypescores-v1',dim:'pmp-dim-mode'};
 const TIME_LIMIT_SEC=3450; // 57min 30sec (PMP: 230min/180q × 45q)
 const MAX_SESSIONS_PER_DAY=4;
 const MIN_STREAK_SESSIONS=2; // need at least 2 sessions/day to earn the streak
@@ -640,7 +696,8 @@ const TI={
 // ── STATE ──────────────────────────────────────────────────────────────
 let S={topics:[],history:[],streak:{current:0,longest:0,lastDate:null,totalSessions:0},
        questions:[],qi:0,ans:{},orderStates:{},bookmarks:[],wrongBank:[],topicScores:{},
-       explRatings:{},wrongPatterns:{}};
+       explRatings:{},wrongPatterns:{},qTypeScores:{}};
+let drillMode=false;
 let cdTimer=null,dp=null,quizStart=null,qTimerIv=null,dragSrc=null;
 let touchDragEl=null,touchClone=null,touchStartY=0;
 
@@ -786,18 +843,22 @@ function addToWrongBank(questions,answers,orderStates){
 
 function updateTopicScores(questions,answers,orderStates){
   const ts={...S.topicScores};
+  const qts={...S.qTypeScores};
   questions.forEach(q=>{
     if(!q.topic)return;
     if(!ts[q.topic])ts[q.topic]={correct:0,total:0,streak:0};
     ts[q.topic].total++;
-    if(scoreQuestion(q,answers,orderStates)===1){
-      ts[q.topic].correct++;
-      ts[q.topic].streak=(ts[q.topic].streak||0)+1;
-    } else {
-      ts[q.topic].streak=0; // reset streak on wrong answer
-    }
+    const correct=scoreQuestion(q,answers,orderStates)===1;
+    if(correct){ts[q.topic].correct++;ts[q.topic].streak=(ts[q.topic].streak||0)+1;}
+    else{ts[q.topic].streak=0;}
+    // Track by question type
+    const qtype=q.type||'single';
+    if(!qts[qtype])qts[qtype]={correct:0,total:0};
+    qts[qtype].total++;
+    if(correct)qts[qtype].correct++;
   });
   S.topicScores=ts;ls(K.ts,ts);
+  S.qTypeScores=qts;ls(K.qts,qts);
 }
 
 function updateWrongPatterns(questions,answers,orderStates){
@@ -886,7 +947,9 @@ function buildSyncPayload(){
     topicScores:S.topicScores,
     explRatings:leanRatings,
     wrongPatterns:leanPatterns,
-    anthropicKey:localStorage.getItem(K.k)||''
+    anthropicKey:localStorage.getItem(K.k)||'',
+    examDate:localStorage.getItem(K.ed)||'',
+    qTypeScores:S.qTypeScores||{}
   };
 }
 
@@ -968,6 +1031,20 @@ function mergeData(remote){
   if(remote.anthropicKey&&!localStorage.getItem(K.k)){
     localStorage.setItem(K.k,remote.anthropicKey);changed=true;
   }
+
+  // Exam date: take remote if local not set
+  if(remote.examDate&&!localStorage.getItem(K.ed)){
+    localStorage.setItem(K.ed,remote.examDate);changed=true;
+  }
+
+  // qTypeScores: merge by taking max total per type
+  const rqts=remote.qTypeScores||{};
+  let qtsChanged=false;
+  Object.entries(rqts).forEach(([type,rv])=>{
+    const lv=S.qTypeScores[type];
+    if(!lv||rv.total>lv.total){S.qTypeScores[type]=rv;qtsChanged=true;}
+  });
+  if(qtsChanged){ls(K.qts,S.qTypeScores);changed=true;}
 
   return changed;
 }
@@ -1113,7 +1190,9 @@ window.addEventListener('load',()=>{
   S.topics=lg(K.t)||[];S.history=lg(K.h)||[];
   S.streak=lg(K.s)||{current:0,longest:0,lastDate:null,totalSessions:0};
   S.wrongBank=lg(K.wb)||[];S.bookmarks=lg(K.bm)||[];S.topicScores=lg(K.ts)||{};
-  S.explRatings=lg(K.er)||{};S.wrongPatterns=lg(K.wp)||{};
+  S.explRatings=lg(K.er)||{};S.wrongPatterns=lg(K.wp)||{};S.qTypeScores=lg(K.qts)||{};
+  // Restore dim mode
+  if(localStorage.getItem(K.dim)==='1')document.getElementById('app').classList.add('dim-mode');
 
   const jk=getSyncKey();
   // If sync is set up but no Anthropic key locally, pull from cloud first then continue
@@ -1168,7 +1247,33 @@ function tickCd(){
 // ── DASHBOARD ─────────────────────────────────────────────────────────
 function renderDash(){
   $('today-date').textContent=new Date().toLocaleDateString([],{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-  $('days-left').textContent=60;
+  // Dynamic exam countdown
+  const examDateStr=localStorage.getItem(K.ed);
+  const daysEl=$('days-left'),badgeEl=$('ontrack-badge');
+  if(examDateStr){
+    const ed=new Date(examDateStr);ed.setHours(23,59,59);
+    const diff=Math.max(0,Math.ceil((ed-new Date())/86400000));
+    daysEl.textContent=diff;
+    // On-track logic: need readiness ≥ 80 by exam day; we estimate ~3pts gain per 10 sessions
+    const r=calcReadiness();
+    if(r!=null&&badgeEl){
+      const needed=80;const current=r;const gap=needed-current;
+      const sessNeeded=Math.ceil(gap/0.3);const sessPerDay=2;
+      const daysNeeded=Math.ceil(sessNeeded/sessPerDay);
+      let trackLabel,trackColor;
+      if(diff<=0){trackLabel='📅 Exam day!';trackColor='#F5A623';}
+      else if(r>=80){trackLabel='✅ On track';trackColor='#10B981';}
+      else if(daysNeeded<=diff){trackLabel='📈 On track';trackColor='#10B981';}
+      else if(daysNeeded<=diff*1.4){trackLabel='⚡ Tight — study daily';trackColor='#F59E0B';}
+      else{trackLabel='⚠️ Behind — push harder';trackColor='#EF4444';}
+      badgeEl.innerHTML=`<span class="ontrack-badge" style="background:${trackColor}18;color:${trackColor};border:1px solid ${trackColor}30">${trackLabel}</span>`;
+    } else if(badgeEl){
+      badgeEl.innerHTML=`<span style="font-size:10px;color:var(--muted)">tap to edit</span>`;
+    }
+  } else {
+    daysEl.textContent='—';
+    if(badgeEl)badgeEl.innerHTML=`<span style="font-size:10px;color:var(--gold);cursor:pointer" onclick="openExamDateModal()">📅 Set date</span>`;
+  }
   const h=S.history,str=S.streak;
   $('stat-streak').textContent=str.current||0;$('stat-best').textContent=str.longest||0;
   $('stat-total-q').textContent=h.reduce((a,x)=>a+(x.total||0),0);
@@ -1238,6 +1343,27 @@ function renderDash(){
       <div style="flex:1"><div class="weak-topic">${esc(w.topic)}</div><div class="weak-bar"><div class="weak-bar-f" style="width:${w.pct}%"></div></div></div>
       <div><div class="weak-pct">${w.pct}%</div><div style="font-size:10px;color:var(--muted)">${w.total}q</div></div>
     </div>`).join('');
+    // Show drill button only if can start
+    const db=$('drill-btn');if(db)db.style.display=canStart()?'flex':'none';
+  }
+
+  // Question type stats
+  const qts=S.qTypeScores;
+  const qtypes=Object.keys(TI);
+  const hasQts=qtypes.some(t=>qts[t]&&qts[t].total>0);
+  if(hasQts){
+    $('qtype-stats-wrap').style.display='block';
+    $('qtype-grid').innerHTML=qtypes.map(t=>{
+      const ti=TI[t],d=qts[t]||{correct:0,total:0};
+      const pct=d.total>0?Math.round(d.correct/d.total*100):null;
+      const col=pct==null?'var(--muted)':pct>=75?'#10B981':pct>=60?'#F59E0B':'#EF4444';
+      return`<div class="qtype-cell">
+        <div class="qtype-icon">${ti.icon}</div>
+        <div class="qtype-pct" style="color:${col}">${pct!=null?pct+'%':'—'}</div>
+        <div class="qtype-label">${ti.label}</div>
+        ${d.total>0?`<div class="qtype-bar"><div class="qtype-bar-f" style="width:${pct}%;background:${col}"></div></div><div style="font-size:9px;color:var(--muted);margin-top:3px">${d.correct}/${d.total}</div>`:''}
+      </div>`;
+    }).join('');
   }
 
   // Spaced rep info
@@ -1338,7 +1464,7 @@ document.addEventListener('DOMContentLoaded',()=>{const i=$('ak-input');if(i)i.a
 async function api(sys,msg){
   const key=localStorage.getItem(K.k)||'';
   if(!key){openApiKey();throw new Error('No API key')}
-  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:7000,system:sys,messages:[{role:'user',content:msg}]})});
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:9000,system:sys,messages:[{role:'user',content:msg}]})});
   const d=await r.json();
   if(d.error){if(d.error.type==='authentication_error'){localStorage.removeItem(K.k);openApiKey();throw new Error('Invalid API key')}throw new Error(d.error.message)}
   return d.content.filter(b=>b.type==='text').map(b=>b.text).join('');
@@ -1349,30 +1475,46 @@ function parseQ(raw){const s=raw.indexOf('['),e=raw.lastIndexOf(']');if(s===-1||
 async function startSession(){
   if(!canStart()){showErr('You\'ve completed all 4 sessions today. Come back tomorrow — you\'re doing great!');return}
   ss('generating');
+  const titleEl=$('gen-title'),descEl=$('gen-desc');
+  if(titleEl)titleEl.textContent='Crafting Your Questions';
+  if(descEl)descEl.textContent='Generating 45 questions with weak area targeting + spaced repetition across all 4 real exam formats. This takes about 30 seconds.';
   const n=S.history.length,diff=n<5?'easy-medium':n<20?'medium':n<50?'medium-hard':'hard';
   const ctx=S.topics.length>0?'Already covered (avoid repeating these exact topics): '+S.topics.slice(-80).join(', '):'First session.';
   const weakTopics=getWeakTopics();
   const weakCtx=weakTopics.length>0?`\nWEAK AREAS — generate MORE questions on these topics (student scores <60%): ${weakTopics.map(w=>w.topic+'('+w.pct+'%)').join(', ')}. Prioritise these heavily.`:'';
 
-  const sys=`You are a senior PMP exam coach. Generate ONLY a valid JSON array of exactly 15 PMP exam questions. No text outside the array. No markdown.
+  const sys=`You are an expert PMP exam question writer replicating the EXACT style of the current PMI PMP exam (2021+ format, PMBOK 7 + Agile Practice Guide).
 
-QUESTION TYPE DISTRIBUTION per batch:
-- 8 of type "single" (4 options A-D)
-- 3 of type "multi" (5 options A-E, pick 2-3)
-- 3 of type "order" (arrange 4-5 steps)
-- 1 of type "fillblank" (EV calculation)
+CRITICAL RULES — follow every one precisely:
 
-SCHEMAS:
-single:    {"type":"single","id":"q01","domain":"People","topic":"...","difficulty":"Easy|Medium|Hard","approach":"Agile|Hybrid|Predictive","question":"...","options":{"A":"...","B":"...","C":"...","D":"..."},"correct":"B","explanation":"..."}
-multi:     {"type":"multi","id":"q02","domain":"Process","topic":"...","difficulty":"Medium","approach":"Hybrid","question":"Which TWO...? (Select TWO)","options":{"A":"...","B":"...","C":"...","D":"...","E":"..."},"correct":["A","C"],"explanation":"..."}
-order:     {"type":"order","id":"q03","domain":"Process","topic":"...","difficulty":"Medium","approach":"Predictive","question":"Arrange in correct sequence:","items":["Step A","Step B","Step C","Step D"],"correct":["Step B","Step A","Step D","Step C"],"explanation":"..."}
-fillblank: {"type":"fillblank","id":"q04","domain":"Process","topic":"Earned Value Management","difficulty":"Medium","approach":"Predictive","question":"Project: BAC=$100,000 PV=$40,000 EV=$35,000 AC=$42,000. Calculate SPI (2 decimal places).","formula":"SPI = EV / PV","correct":"0.88","tolerance":0.01,"unit":"","explanation":"SPI = 35000/40000 = 0.875 ≈ 0.88. Since SPI < 1, the project is behind schedule."}
-Rules: domain must be exactly People, Process, or Business Environment. All scenario-based. Plausible wrong answers. Reference PMBOK 7 or Agile Practice Guide.`;
+1. SCENARIO LENGTH: Every question stem MUST be 80–180 words. Set a realistic project scene with a named PM, project type, team size, timeline pressure, and a specific problem or decision point. Never write short 1–2 sentence questions.
+
+2. ANSWER QUALITY — "BEST ANSWER" TRAP: All 4–5 options must be plausible and partially correct. A test-taker who knows the topic should still have to think carefully. Never include obviously wrong distractors. The wrong options should represent common real-world mistakes or less-optimal-but-valid approaches.
+
+3. APPROACH MIX: Across 15 questions, generate: 7 Agile/Scrum scenarios, 5 Hybrid scenarios, 3 Predictive/Waterfall scenarios. Reflect the real exam's ~50% agile weighting.
+
+4. QUESTION TYPE DISTRIBUTION per batch of 15:
+   - 9 of type "single" (4 options A-D, one best answer)
+   - 4 of type "multi" (5 options A-E) — for multi, sometimes say "Select TWO" but also sometimes say "Select all that apply" with 2–4 correct answers
+   - 2 of type "order" (arrange 4–5 steps in correct sequence)
+   - 0 fillblank unless batch explicitly asks for it — replace with situational single questions instead
+
+5. EXPLANATION: Must explain WHY the correct answer is best AND why each wrong answer is tempting but incorrect. Min 60 words.
+
+6. TOPIC COVERAGE per question — rotate through: servant leadership, conflict resolution, stakeholder engagement, risk response, change control, scope creep, sprint ceremonies, retrospectives, hybrid governance, benefits realisation, team performance, procurement, resource management, communications planning, quality audits, agile estimation, WBS, lessons learned, EVM interpretation, PMO, RACI, OPA/EEF.
+
+SCHEMAS (do not deviate):
+single:    {"type":"single","id":"q01","domain":"People","topic":"Conflict Resolution","difficulty":"Medium","approach":"Agile","question":"[80-180 word scenario]","options":{"A":"[plausible]","B":"[plausible]","C":"[plausible, best answer]","D":"[plausible]"},"correct":"C","explanation":"[60+ words explaining why C is best and why A/B/D are tempting but wrong]"}
+multi:     {"type":"multi","id":"q02","domain":"Process","topic":"Sprint Planning","difficulty":"Hard","approach":"Agile","question":"[80-180 word scenario] Select TWO.","options":{"A":"...","B":"...","C":"...","D":"...","E":"..."},"correct":["B","D"],"explanation":"[60+ words]"}
+order:     {"type":"order","id":"q03","domain":"Process","topic":"Risk Management","difficulty":"Medium","approach":"Predictive","question":"[Scenario context]. Arrange the following steps in the correct order:","items":["Step A","Step B","Step C","Step D"],"correct":["Step C","Step A","Step D","Step B"],"explanation":"[60+ words]"}
+
+Domain must be exactly: People, Process, or Business Environment.
+Generate ONLY the JSON array. No text outside it. No markdown fences.`;
 
   const batches=[
-    `People domain (servant leadership, conflict resolution, emotional intelligence, coaching, virtual teams, stakeholder engagement) + Process scope/schedule. ${weakCtx}`,
-    `Process domain (cost EVM, risk, procurement, quality, change control, agile ceremonies sprint planning retrospectives standups). ${weakCtx}`,
-    `Business Environment (benefits realization, governance, agility) + Process integration/communications/resources + hybrid approaches. ${weakCtx}`,
+    `Focus: People domain — servant leadership, coaching underperforming team members, resolving conflict between developers and stakeholders, motivating cross-functional agile teams, virtual team challenges, emotional intelligence in difficult conversations. Also include 2 Process questions on scope and schedule management. ${weakCtx}`,
+    `Focus: Process domain — sprint ceremonies (planning, retrospective, review, daily scrum), hybrid change control with a CCB, risk identification and response strategies, procurement decisions, quality audits and continuous improvement, EVM interpretation (NOT calculation — interpret what CPI/SPI values mean and what PM should do). ${weakCtx}`,
+    `Focus: Business Environment — benefits realisation, organisational agility, governance and compliance, strategic alignment, PMO role, managing organisational change. Also include hybrid approach questions where PM must decide whether to use agile or predictive for a specific deliverable. ${weakCtx}`,
   ];
 
   let all=[];
@@ -1413,6 +1555,77 @@ Rules: domain must be exactly People, Process, or Business Environment. All scen
     S.questions=shuffled;S.qi=0;S.ans={};S.orderStates=orderStates;
     quizStart=Date.now();renderQuiz();ss('quiz');startQTimer();
   }catch(e){ss('dashboard');showErr(e.message)}
+}
+
+// ── DRILL MODE ─────────────────────────────────────────────────────────
+async function startDrillSession(){
+  if(!canStart()){showErr('No sessions remaining today — all 4 used up. Come back tomorrow!');return}
+  const weakTopics=getWeakTopics();
+  if(weakTopics.length===0){showErr('No weak areas found yet — complete a few sessions first!');return}
+  ss('generating');
+  const titleEl=$('gen-title'),descEl=$('gen-desc');
+  if(titleEl)titleEl.textContent='Building Your Weak Area Drill';
+  if(descEl)descEl.textContent='Generating 15 targeted questions on your weakest topics. Should be quick!';
+  const topicList=weakTopics.slice(0,5).map(w=>`${w.topic} (${w.pct}%)`).join(', ');
+  $('gen-status').textContent='Building targeted drill…';
+
+  const sys=`You are an expert PMP exam question writer replicating the EXACT style of the current PMI PMP exam (2021+ format, PMBOK 7 + Agile Practice Guide).
+
+CRITICAL RULES:
+1. SCENARIO LENGTH: Every question stem MUST be 80–180 words. Realistic project context with a named PM, project type, team, timeline pressure, and a specific problem.
+2. ANSWER QUALITY: All options must be plausible. The wrong answers should be common real-world mistakes or valid-but-suboptimal choices. Never include obviously wrong distractors.
+3. APPROACH MIX: Mix Agile, Hybrid, and Predictive scenarios naturally.
+4. EXPLANATION: Min 60 words. Explain WHY correct is best AND why each wrong answer is tempting but incorrect.
+5. Generate ONLY the JSON array. No text outside it. No markdown.
+
+SCHEMAS:
+single: {"type":"single","id":"q01","domain":"People","topic":"...","difficulty":"Hard","approach":"Agile","question":"[80-180 word scenario]","options":{"A":"...","B":"...","C":"...","D":"..."},"correct":"B","explanation":"[60+ words]"}
+multi:  {"type":"multi","id":"q02","domain":"Process","topic":"...","difficulty":"Hard","approach":"Hybrid","question":"[80-180 word scenario] Select TWO.","options":{"A":"...","B":"...","C":"...","D":"...","E":"..."},"correct":["A","C"],"explanation":"[60+ words]"}
+order:  {"type":"order","id":"q03","domain":"Process","topic":"...","difficulty":"Hard","approach":"Predictive","question":"[Scenario]. Arrange the following steps in the correct order:","items":["Step A","Step B","Step C","Step D"],"correct":["Step B","Step D","Step A","Step C"],"explanation":"[60+ words]"}
+
+Domain must be exactly: People, Process, or Business Environment. Generate exactly 15 questions.`;
+
+  try{
+    const raw=await api(sys,`Generate 15 targeted questions EXCLUSIVELY on these weak areas: ${topicList}. All questions must be Medium-Hard difficulty. Use a mix of single, multi, and order types. Make the scenario stems 80–180 words each. Make wrong answers highly plausible — typical real-world mistakes a PM might make.`);
+    const parsed=parseQ(raw);
+    if(!Array.isArray(parsed)||parsed.length<8)throw new Error('Not enough drill questions — please try again');
+    const ts=Date.now();
+    const tagged=parsed.slice(0,15).map((q,i)=>({...q,id:`drill_${ts}_${i}`,_fromBank:false}));
+    const orderStates={};
+    tagged.forEach(q=>{if(q.type==='order'&&q.items){orderStates[q.id]=[...q.items].sort(()=>Math.random()-.5)}});
+    S.questions=tagged;S.qi=0;S.ans={};S.orderStates=orderStates;
+    drillMode=true;
+    quizStart=Date.now();renderQuiz();ss('quiz');startQTimer();
+  }catch(e){ss('dashboard');showErr(e.message)}
+}
+
+// ── EXAM DATE MODAL ────────────────────────────────────────────────────
+function openExamDateModal(){
+  const saved=localStorage.getItem(K.ed);
+  const inp=$('exam-date-input');
+  if(inp){
+    // Set min to today, max to end of 2026
+    const today=new Date().toISOString().slice(0,10);
+    inp.min=today;inp.max='2026-12-31';
+    inp.value=saved||'2026-06-28'; // default to just before July change
+  }
+  $('exam-date-modal').style.display='flex';
+}
+function closeExamDateModal(){$('exam-date-modal').style.display='none'}
+function saveExamDate(){
+  const val=$('exam-date-input').value;
+  if(!val){closeExamDateModal();return}
+  localStorage.setItem(K.ed,val);
+  closeExamDateModal();
+  renderDash();
+}
+
+// ── DIM MODE ───────────────────────────────────────────────────────────
+function toggleDim(){
+  const app=$('app'),btn=$('dim-btn');
+  const isOn=app.classList.toggle('dim-mode');
+  localStorage.setItem(K.dim,isOn?'1':'0');
+  if(btn){btn.style.opacity=isOn?'1':'0.6';btn.title=isOn?'Dim mode ON — tap to disable':'Toggle dim mode';}
 }
 
 // ── QUIZ TIMER ─────────────────────────────────────────────────────────
@@ -1669,14 +1882,35 @@ function submitQuiz(){
     str.lastDate=today;
   }
   str.totalSessions=(str.totalSessions||0)+1;ls(K.s,str);S.streak=str;
-  S.orderStates={};renderResults(score,total,pct,bD,durSec);ss('results');
+  S.orderStates={};renderResults(score,total,pct,bD,durSec,S.questions,ans,ords);ss('results');
+  drillMode=false;
   autoSync(); // push to cloud after every session
 }
 
 // ── RESULTS ────────────────────────────────────────────────────────────
-function renderResults(score,total,pct,bD,durSec){
+function renderResults(score,total,pct,bD,durSec,qs,ans,ords){
   const g=grade(pct),avgPerQ=durSec&&total?Math.round(durSec/total):0;
   const overSec=durSec>TIME_LIMIT_SEC?durSec-TIME_LIMIT_SEC:0,underSec=durSec>0&&durSec<=TIME_LIMIT_SEC?TIME_LIMIT_SEC-durSec:0;
+
+  // Question type breakdown
+  const qtBreakdown={};
+  qs.forEach(q=>{
+    const t=q.type||'single';
+    if(!qtBreakdown[t])qtBreakdown[t]={correct:0,total:0};
+    qtBreakdown[t].total++;
+    if(scoreQuestion(q,ans,ords))qtBreakdown[t].correct++;
+  });
+  const qtHTML=Object.entries(qtBreakdown).map(([t,d])=>{
+    const ti=TI[t]||TI.single;const p=Math.round(d.correct/d.total*100);
+    const c=p>=75?'#10B981':p>=60?'#F59E0B':'#EF4444';
+    return`<div class="drc" style="border-color:${c}28">
+      <div style="font-size:18px;margin-bottom:5px">${ti.icon}</div>
+      <div class="drp" style="color:${c};font-size:22px">${p}%</div>
+      <div class="drc2" style="color:var(--muted)">${d.correct}/${d.total}</div>
+      <div style="font-size:10px;color:var(--subtle);margin-top:4px">${ti.label}</div>
+      <div style="height:3px;background:#1A2540;border-radius:2px;margin-top:8px;overflow:hidden"><div style="height:100%;width:${p}%;background:${c};border-radius:2px"></div></div>
+    </div>`;
+  }).join('');
   $('results-hero').innerHTML=`<div class="sh" style="background:linear-gradient(135deg,#0E1320,${g.c}0D);border-color:${g.c}30">
     <div class="se">${g.e}</div><div class="sv2" style="color:${g.c}">${pct}<span style="font-size:32px">%</span></div>
     <div class="sg2">${g.l}</div><div class="ss2">${score} correct out of ${total}</div>
@@ -1691,7 +1925,11 @@ function renderResults(score,total,pct,bD,durSec){
       :`<div style="margin-top:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:10px;padding:10px 16px;font-size:13px;color:#34D399">✅ Completed <strong style="font-family:var(--fh)">${fmtMMSS(underSec)} inside</strong> the allowed time!</div>`
     }`:''}
   </div>`;
-  $('results-domains').innerHTML=`<div class="drg">${Object.entries(bD).map(([domain,d])=>{const dp2=Math.round(d.c/d.t*100),dc=DOM_C[domain]||{bg:'#64748B',glow:'#94A3B8',emoji:'📋'};return`<div class="drc" style="border-color:${dc.bg}28"><div style="font-size:12px;color:var(--subtle);margin-bottom:8px">${dc.emoji} ${domain}</div><div class="drp" style="color:${dc.glow}">${dp2}%</div><div class="drc2" style="color:var(--muted)">${d.c}/${d.t} correct</div><div style="height:4px;background:#1A2540;border-radius:2px;margin-top:10px;overflow:hidden"><div style="height:100%;width:${dp2}%;background:linear-gradient(90deg,${dc.bg},${dc.glow});border-radius:2px"></div></div></div>`;}).join('')}</div>`;
+  $('results-domains').innerHTML=`
+    <div style="font-family:var(--fh);font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">By Domain</div>
+    <div class="drg" style="margin-bottom:18px">${Object.entries(bD).map(([domain,d])=>{const dp2=Math.round(d.c/d.t*100),dc=DOM_C[domain]||{bg:'#64748B',glow:'#94A3B8',emoji:'📋'};return`<div class="drc" style="border-color:${dc.bg}28"><div style="font-size:12px;color:var(--subtle);margin-bottom:8px">${dc.emoji} ${domain}</div><div class="drp" style="color:${dc.glow}">${dp2}%</div><div class="drc2" style="color:var(--muted)">${d.c}/${d.t} correct</div><div style="height:4px;background:#1A2540;border-radius:2px;margin-top:10px;overflow:hidden"><div style="height:100%;width:${dp2}%;background:linear-gradient(90deg,${dc.bg},${dc.glow});border-radius:2px"></div></div></div>`;}).join('')}</div>
+    <div style="font-family:var(--fh);font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">By Question Type</div>
+    <div class="drg">${qtHTML}</div>`;
   $('results-qlist').innerHTML=S.questions.map((q,i)=>buildQLItem(q,i,`res${i}`,{})).join('');
 }
 
@@ -1950,10 +2188,41 @@ function renderHistory(){
 
 // ── QUICK REFERENCE CARDS ──────────────────────────────────────────────
 function showRef(tab){
+  // Clear search when switching tabs
+  const srch=$('ref-search');if(srch&&srch.value){srch.value='';filterRef('');}
   document.querySelectorAll('.ref-tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.ref-panel').forEach(p=>p.classList.remove('active'));
   document.querySelector(`.ref-tab[onclick="showRef('${tab}')"]`).classList.add('active');
   $('ref-'+tab).classList.add('active');
+}
+function filterRef(q){
+  const term=q.trim().toLowerCase();
+  // Show all panels if searching, else only the active one
+  document.querySelectorAll('.ref-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.ref-panel').forEach(p=>{
+    if(!term){
+      // Restore to first tab active state if no query
+      const firstTab=document.querySelector('.ref-tab');
+      if(firstTab&&!document.querySelector('.ref-tab.active')){firstTab.classList.add('active');$('ref-ev').classList.add('active');}
+      p.style.display='';
+    } else {
+      p.style.display='block';
+    }
+  });
+  if(!term){return;}
+  // Highlight matching text in all panels
+  document.querySelectorAll('.ref-panel').forEach(panel=>{
+    // Walk through ev-rows, principle-items, agile-cards
+    const items=panel.querySelectorAll('.ev-row,.principle-item,.agile-card');
+    let panelHasMatch=false;
+    items.forEach(item=>{
+      const text=item.textContent.toLowerCase();
+      if(text.includes(term)){item.style.display='';panelHasMatch=true;}
+      else{item.style.display='none';}
+    });
+    // If no items matched, hide the panel entirely
+    if(!panelHasMatch&&items.length>0)panel.style.display='none';
+  });
 }
 function buildRefCards(){
   // EV Formulas
