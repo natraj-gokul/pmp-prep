@@ -10,6 +10,21 @@
 <meta name="application-name" content="PMPPrep"/>
 <meta name="theme-color" content="#07090F"/>
 <title>PMPPrep · AI-Powered PMP Exam Prep</title>
+<script>
+// Independent escape hatch — runs before anything else
+// If loading screen is still showing after 7 seconds, force escape
+window._pmpEscape=setTimeout(function(){
+  try{
+    var screens=document.querySelectorAll('.screen');
+    screens.forEach(function(s){s.classList.remove('active');s.style.display='none'});
+    var hasKey=localStorage.getItem('pmp-apikey-v1');
+    var target=document.getElementById(hasKey?'screen-dashboard':'screen-apikey');
+    if(target){target.style.display='flex';target.classList.add('active');}
+    // If dashboard, do minimal render
+    if(hasKey&&window.renderDash)try{renderDash();startCd();buildRefCards();}catch(e){}
+  }catch(e){}
+},7000);
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
@@ -1187,54 +1202,72 @@ async function autoSync(){if(getSyncKey())syncNow(false)}
 
 
 window.addEventListener('load',()=>{
-  // Hard fallback — if still on loading screen after 10s, escape it
-  setTimeout(()=>{
-    const ls=$('screen-loading');
-    if(ls&&ls.classList.contains('active')){
-      if(localStorage.getItem(K.k)){ss('dashboard');renderDash();startCd();buildRefCards();}
-      else{ss('apikey');}
+  // ── STEP 1: Load all local state immediately ──────────────────────────
+  try{
+    S.topics=lg(K.t)||[];
+    S.history=lg(K.h)||[];
+    S.streak=lg(K.s)||{current:0,longest:0,lastDate:null,totalSessions:0};
+    S.wrongBank=lg(K.wb)||[];
+    S.bookmarks=lg(K.bm)||[];
+    S.topicScores=lg(K.ts)||{};
+    S.explRatings=lg(K.er)||{};
+    S.wrongPatterns=lg(K.wp)||{};
+    S.qTypeScores=lg(K.qts)||{};
+    if(localStorage.getItem(K.dim)==='1'){
+      const appEl=document.getElementById('app');
+      if(appEl)appEl.classList.add('dim-mode');
     }
-  },10000);
-  S.topics=lg(K.t)||[];S.history=lg(K.h)||[];
-  S.streak=lg(K.s)||{current:0,longest:0,lastDate:null,totalSessions:0};
-  S.wrongBank=lg(K.wb)||[];S.bookmarks=lg(K.bm)||[];S.topicScores=lg(K.ts)||{};
-  S.explRatings=lg(K.er)||{};S.wrongPatterns=lg(K.wp)||{};S.qTypeScores=lg(K.qts)||{};
-  // Restore dim mode
-  if(localStorage.getItem(K.dim)==='1')document.getElementById('app').classList.add('dim-mode');
+  }catch(e){console.warn('State load error:',e)}
 
+  // ── STEP 2: Navigate immediately — NEVER wait for sync ───────────────
+  try{
+    if(localStorage.getItem(K.k)){
+      ss('dashboard');
+      try{renderDash();}catch(e){console.warn('renderDash error:',e)}
+      try{startCd();}catch(e){console.warn('startCd error:',e)}
+      try{buildRefCards();}catch(e){console.warn('buildRefCards error:',e)}
+    } else {
+      ss('apikey');
+    }
+  }catch(e){
+    console.error('Navigation error:',e);
+    // Last resort — just hide loading
+    try{ss('apikey');}catch(e2){
+      const ls=$('screen-loading');
+      if(ls){ls.style.display='none';ls.classList.remove('active');}
+    }
+  }
+
+  // ── STEP 3: Sync in background — completely non-blocking ─────────────
   const jk=getSyncKey();
-  // Helper: proceed to dashboard or apikey screen
-  function proceed(){
-    if(localStorage.getItem(K.k)){ss('dashboard');renderDash();startCd();buildRefCards();}
-    else{ss('apikey');}
-  }
-  // If sync is set up but no Anthropic key locally, pull from cloud first — but with a 6s timeout
-  if(jk&&!localStorage.getItem(K.k)){
-    updateSyncStrip('☁️ Fetching your settings from cloud…',true,true);
-    const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),6000));
-    Promise.race([syncNow(false),timeout])
-      .then(()=>{
-        if(localStorage.getItem(K.k)){ss('dashboard');renderDash();startCd();buildRefCards();updateSyncStrip('✅ Synced',true)}
-        else{ss('apikey')}
-      })
-      .catch(()=>{proceed()});
-    return;
-  }
-  proceed();
-  // Pull latest sync data on load — non-blocking, with timeout
   if(jk){
     const lastSync=localStorage.getItem(K.lastSync);
     const t=lastSync?new Date(parseInt(lastSync)).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'never';
-    updateSyncStrip(`☁️ Last synced ${t} — pulling latest…`,true,true);
-    const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000));
-    Promise.race([syncNow(false),timeout])
-      .then(()=>renderDash())
-      .catch(()=>updateSyncStrip('⚠️ Sync timed out — working offline',false));
+    updateSyncStrip(`☁️ Last synced ${t}`,true,false);
+    // Fire and forget — 8s timeout, then give up silently
+    const raceTimeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000));
+    Promise.race([syncNow(false),raceTimeout])
+      .then(()=>{
+        // If sync pulled an API key we didn't have, navigate to dashboard now
+        if(localStorage.getItem(K.k)&&$('screen-apikey').classList.contains('active')){
+          ss('dashboard');
+          try{renderDash();startCd();buildRefCards();}catch(e){}
+        } else {
+          try{renderDash();}catch(e){}
+        }
+      })
+      .catch(()=>{
+        updateSyncStrip('⚠️ Sync timed out — working offline',false);
+      });
   }
-  const ua=navigator.userAgent,iOS=/iphone|ipad|ipod/i.test(ua),android=/android/i.test(ua);
-  const stIOS=!!window.navigator.standalone,stAnd=window.matchMedia('(display-mode:standalone)').matches;
-  if(iOS&&!stIOS)banner('ios');
-  else if(android&&!stAnd&&!dp)setTimeout(()=>{if(!dp&&!window.matchMedia('(display-mode:standalone)').matches)banner('am')},1500);
+
+  // ── STEP 4: PWA install banners ───────────────────────────────────────
+  try{
+    const ua=navigator.userAgent,iOS=/iphone|ipad|ipod/i.test(ua),android=/android/i.test(ua);
+    const stIOS=!!window.navigator.standalone,stAnd=window.matchMedia('(display-mode:standalone)').matches;
+    if(iOS&&!stIOS)banner('ios');
+    else if(android&&!stAnd&&!dp)setTimeout(()=>{if(!dp&&!window.matchMedia('(display-mode:standalone)').matches)banner('am')},1500);
+  }catch(e){}
 });
 
 // ── COUNTDOWN ──────────────────────────────────────────────────────────
