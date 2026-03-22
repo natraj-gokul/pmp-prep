@@ -1522,17 +1522,25 @@ async function api(sys,msg){
   return d.content.filter(b=>b.type==='text').map(b=>b.text).join('');
 }
 function parseQ(raw){
+  // Step 0: Pre-clean — strip markdown fences and leading/trailing noise
+  let cleaned=raw
+    .replace(/```json\s*/gi,'')
+    .replace(/```\s*/g,'')
+    .replace(/[\u201C\u201D]/g,'"')   // curly double quotes → straight
+    .replace(/[\u2018\u2019]/g,"'")   // curly single quotes → straight
+    .replace(/[\u2013\u2014]/g,'-')   // en/em dash → hyphen
+    .replace(/\u00A0/g,' ')           // non-breaking space → space
+    .trim();
+
   // Extract between first [ and last ]
-  const s=raw.indexOf('['),e=raw.lastIndexOf(']');
-  if(s===-1||e<=s)throw new Error('No JSON array found — please try again');
-  let text=raw.slice(s,e+1);
+  const s=cleaned.indexOf('['),e=cleaned.lastIndexOf(']');
+  if(s===-1||e<=s)throw new Error('AI returned no JSON array. Got: '+raw.slice(0,120));
+  let text=cleaned.slice(s,e+1);
 
   // Strategy 1: direct parse
   try{return JSON.parse(text)}catch(e0){}
 
-  // Strategy 2: aggressive string sanitisation
-  // Process character by character, tracking whether we're inside a JSON string
-  // and escaping anything that would break the parser
+  // Strategy 2: character-by-character sanitiser — fixes unescaped control chars inside strings
   try{
     let out='',inStr=false,esc=false;
     for(let i=0;i<text.length;i++){
@@ -1541,35 +1549,22 @@ function parseQ(raw){
       if(c==='\\'&&inStr){out+=c;esc=true;continue}
       if(c==='"'){inStr=!inStr;out+=c;continue}
       if(inStr){
-        // Inside a string — escape anything dangerous
         if(c==='\n'){out+='\\n';continue}
         if(c==='\r'){out+='\\r';continue}
         if(c==='\t'){out+='\\t';continue}
-        // Replace smart/curly quotes with straight quotes
-        if(c==='\u201C'||c==='\u201D'){out+='\\"';continue}
-        if(c==='\u2018'||c==='\u2019'){out+="'";continue}
-        // Replace en/em dash with regular dash
-        if(c==='\u2013'||c==='\u2014'){out+='-';continue}
         out+=c;
-      } else {
-        out+=c;
-      }
+      }else{out+=c;}
     }
     return JSON.parse(out);
   }catch(e1){}
 
-  // Strategy 3: remove trailing commas before } or ]
+  // Strategy 3: remove trailing commas + re-try
   try{
-    const cleaned=text
-      .replace(/,\s*}/g,'}')
-      .replace(/,\s*]/g,']')
-      .replace(/[\u201C\u201D]/g,'"')
-      .replace(/[\u2018\u2019]/g,"'")
-      .replace(/[\u2013\u2014]/g,'-');
-    return JSON.parse(cleaned);
+    const t2=text.replace(/,(\s*[}\]])/g,'$1');
+    return JSON.parse(t2);
   }catch(e2){}
 
-  // Strategy 4: object-by-object extraction — most robust fallback
+  // Strategy 4: object-by-object extraction
   const objects=[];
   let depth=0,start=-1,inString=false,escaped=false;
   for(let i=0;i<text.length;i++){
@@ -1582,10 +1577,9 @@ function parseQ(raw){
     else if(c==='}'){
       depth--;
       if(depth===0&&start>=0){
-        // Try to parse this object with sanitisation
         let chunk=text.slice(start,i+1);
+        // Sanitise each chunk individually
         try{
-          // Quick sanitise
           let out2='',ins=false,es=false;
           for(let j=0;j<chunk.length;j++){
             const ch=chunk[j];
@@ -1607,7 +1601,8 @@ function parseQ(raw){
   }
   if(objects.length>=4)return objects;
 
-  throw new Error('Could not parse AI response — please try again (the AI returned malformed data)');
+  // All strategies failed — show a snippet of what we got for debugging
+  throw new Error('Parse failed. Raw snippet: '+raw.slice(0,200));
 }
 
 // ── START SESSION ──────────────────────────────────────────────────────
@@ -1660,13 +1655,14 @@ domain must be exactly: People OR Process OR Business Environment`;
       // Try up to 2 times per batch in case of parse failure
       for(let attempt=0;attempt<2;attempt++){
         try{
-          const raw=await api(sys,`Session #${n+1}, difficulty: ${diff}. ${ctx}\n\nGenerate 15 questions for: ${batches[i]}`);
+          const raw=await api(sys,`Generate 15 PMP questions for: ${batches[i]}. Session #${n+1}, difficulty: ${diff}. ${ctx}\n\nREMINDER: Output ONLY the raw JSON array starting with [ and ending with ]. No markdown fences. No apostrophes in text. No newlines inside string values.`);
           parsed=parseQ(raw);
           if(Array.isArray(parsed)&&parsed.length>=4)break;
         }catch(parseErr){
-          if(attempt===1)throw new Error(`Batch ${i+1} failed after 2 attempts — please try again`);
+          console.error('Batch',i+1,'attempt',attempt+1,'error:',parseErr.message);
+          if(attempt===1)throw new Error(`Batch ${i+1} failed: ${parseErr.message}`);
           $('gen-status').textContent=`Batch ${i+1}/3 — retrying…`;
-          await new Promise(r=>setTimeout(r,1000));
+          await new Promise(r=>setTimeout(r,1500));
         }
       }
       if(!parsed||parsed.length<4)throw new Error(`Batch ${i+1} returned too few questions — please try again`);
@@ -1699,6 +1695,7 @@ domain must be exactly: People OR Process OR Business Environment`;
     ls(K.t,[...S.topics,...tagged.map(q=>q.topic).filter(Boolean)]);
     S.topics=[...S.topics,...tagged.map(q=>q.topic).filter(Boolean)];
     S.questions=shuffled;S.qi=0;S.ans={};S.orderStates=orderStates;
+    submitLock=false; // ensure clean state for new session
     quizStart=Date.now();renderQuiz();ss('quiz');startQTimer();
   }catch(e){ss('dashboard');showErr(e.message)}
 }
@@ -1896,8 +1893,13 @@ function renderQG(){
 function updateNav(){
   const tot=S.questions.length,done=S.questions.filter(q=>isAnswered(q)).length,last=S.qi===tot-1;
   $('btn-prev').disabled=S.qi===0;
-  $('btn-next').style.display=last?'none':'';$('btn-submit').style.display=last?'':'none';
-  $('btn-submit').disabled=done<tot;$('btn-submit').textContent=done===tot?'Submit ✓':`${tot-done} left`;
+  $('btn-next').style.display=last?'none':'';
+  $('btn-submit').style.display=last?'':'none';
+  // Always allow submit on last question — unanswered questions auto-score as 0
+  $('btn-submit').disabled=false;
+  const unanswered=tot-done;
+  $('btn-submit').textContent=unanswered===0?'Submit ✓':`Submit (${unanswered} unanswered)`;
+  $('btn-submit').style.background=unanswered>0?'linear-gradient(135deg,#F59E0B,#D97706)':'';
 }
 
 // ── ANSWER HELPERS ─────────────────────────────────────────────────────
@@ -1905,9 +1907,10 @@ function isAnswered(q){
   const a=S.ans[q.id];
   if(q.type==='single')return!!a;
   if(q.type==='multi')return Array.isArray(a)&&a.length>0;
-  if(q.type==='order')return Array.isArray(a)&&a.length>0; // only true after user moves an item
+  // Order: treat as answered if user confirmed OR if orderStates has items (always true)
+  if(q.type==='order')return(Array.isArray(a)&&a.length>0)||(Array.isArray(S.orderStates[q.id])&&S.orderStates[q.id].length>0);
   if(q.type==='fillblank')return a!==undefined&&a!=='';
-  return false;
+  return true; // unknown type — count as answered
 }
 function scoreQuestion(q,ansMap,ordMap){
   const ans=ansMap||S.ans,ords=ordMap||S.orderStates;
@@ -1998,7 +2001,10 @@ function goQ(i){S.qi=i;renderQC();renderQG();updateNav()}
 function exitQuiz(){if(confirm('Exit quiz? All progress will be lost.')){stopQTimer();quizStart=null;S.orderStates={};goHome()}}
 
 // ── SUBMIT ─────────────────────────────────────────────────────────────
+let submitLock=false;
 function submitQuiz(){
+  if(submitLock)return; // prevent double-tap duplicate saves
+  submitLock=true;
   stopQTimer();
   const durSec=quizStart?Math.floor((Date.now()-quizStart)/1000):0;quizStart=null;
   const qs=S.questions,ans=S.ans,ords=S.orderStates;
@@ -2032,6 +2038,7 @@ function submitQuiz(){
   str.totalSessions=(str.totalSessions||0)+1;ls(K.s,str);S.streak=str;
   S.orderStates={};renderResults(score,total,pct,bD,durSec,S.questions,ans,ords);ss('results');
   drillMode=false;
+  submitLock=false; // release lock after successful submit
   autoSync(); // push to cloud after every session
 }
 
