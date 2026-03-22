@@ -1294,7 +1294,7 @@ async function restoreFromSync(){
     if(!res.ok){const t=await res.text();throw new Error('Bin not found — check your Bin ID. ('+res.status+')')}
     const d=await res.json();
     const data=d.record;
-    if(!data||data.v!==1){err.textContent='This bin does not contain PMPPrep data. Check your Bin ID.';status.textContent='';return}
+    if(!data||!data.v){err.textContent='This bin does not contain PMPPrep data. Check your Bin ID.';status.textContent='';return}
     // Save keys
     localStorage.setItem(K.jk,jkVal);
     localStorage.setItem(K.jb,binVal);
